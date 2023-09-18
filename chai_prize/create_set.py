@@ -5,8 +5,6 @@ import fire
 from datasets import load_dataset
 from tqdm import tqdm
 
-from chai_prize.formatter import RPRFormatter
-
 
 def revert_flattening(records):
     fixed_records = []

@@ -20,10 +20,13 @@ class Conversation:
         self.system_message_template = system_message_template
         self.user_message_template = user_message_template
         self.bot_message_template = bot_message_template
+        self.prompt_message_template = prompt_message_template
         self.system_role = system_role
         self.user_role = user_role
         self.bot_role = bot_role
+        self.prompt_role = prompt_role
         self.suffix = suffix
+        self.messages = []
         if system_prompt:
             self.messages = [{
                 "role": self.system_role,
@@ -48,20 +51,6 @@ class Conversation:
             "content": message
         })
 
-    def count_tokens(self, tokenizer, current_messages):
-        final_text = ""
-        for message in current_messages:
-            final_text += self.format_message(message)
-        tokens = tokenizer([final_text])["input_ids"][0]
-        return len(tokens)
-
-    def shrink(self, tokenizer, messages, max_tokens):
-        system_message = messages[0]
-        other_messages = messages[1:]
-        while self.count_tokens(tokenizer, [system_message] + other_messages) > max_tokens:
-            other_messages = other_messages[2:]
-        return [system_message] + other_messages
-
     def format_message(self, message):
         if message["role"] == self.system_role:
             return self.system_message_template.format(**message)
@@ -71,10 +60,8 @@ class Conversation:
             return self.prompt_message_template.format(**message)
         return self.bot_message_template.format(**message)
 
-    def get_prompt(self, tokenizer, max_tokens: int = None, add_suffix: bool = True):
+    def get_prompt(self, tokenizer,add_suffix: bool = True):
         messages = self.messages
-        if max_tokens is not None:
-            messages = self.shrink(tokenizer, messages, max_tokens)
 
         final_text = ""
         for message in messages:
