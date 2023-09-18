@@ -1,0 +1,11 @@
+{
+    "system_message_template": "<s>{role}\n{content}</s>\n",
+    "user_message_template": "<s>{role}\n{content}</s>\n",
+    "bot_message_template": "<s>{role}\n{content}</s>\n",
+    "prompt_message_template": "<s>{role}\n{content}</s>\n",
+    "user_role": "user",
+    "bot_role": "bot",
+    "system_role": "system",
+    "prompt_role": "prompt",
+    "suffix": "<s>bot"
+}
