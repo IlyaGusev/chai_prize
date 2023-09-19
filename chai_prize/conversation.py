@@ -45,6 +45,12 @@ class Conversation:
             "content": message
         })
 
+    def add_system_message(self, message):
+        self.messages.append({
+            "role": self.system_role,
+            "content": message
+        })
+
     def add_prompt_message(self, message):
         self.messages.append({
             "role": self.prompt_role,

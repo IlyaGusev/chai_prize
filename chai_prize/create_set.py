@@ -4,7 +4,7 @@ import random
 import fire
 from datasets import load_dataset
 from tqdm import tqdm
-
+from itertools import chain
 
 def revert_flattening(records):
     fixed_records = []
@@ -20,7 +20,7 @@ def calc_max_length(records):
     return max([sum([len(m["content"]) for m in r["messages"]]) for r in records])
 
 
-def build_char_system_messages(char):
+def build_rpr_char_system_messages(char):
     name = char["name"]
     greeting = char["greeting"]
     context = char["context"]
@@ -47,10 +47,10 @@ def build_char_system_messages(char):
         full_context += "\nDialogue example:\n" + "\n".join(example_messages)
 
     role = "system"
-    if random.random() < 0.1:
+    if random.random() < 0.2:
         role = "prompt"
     chat.insert(0, {
-        "role": "system",
+        "role": role,
         "content": full_context
     })
     return chat
@@ -61,9 +61,16 @@ def main(train_path, val_path):
     records = []
 
     rp_records = []
-    for row in tqdm(load_dataset("IlyaGusev/gpt_roleplay_realm", split="en")):
+    en_split = list(load_dataset("IlyaGusev/gpt_roleplay_realm", split="en"))
+    ru_split = list(load_dataset("IlyaGusev/gpt_roleplay_realm", split="ru"))
+    for record in ru_split:
+        record["language"] = "ru"
+    for row in tqdm(chain(en_split, ru_split)):
         for dialogue in row["dialogues"]:
-            if dialogue["model_name"] != "gpt-4" and random.random() > 0.7:
+            language = row.get("language", "en")
+            if language == "en" and dialogue["model_name"] != "gpt-4" and random.random() > 0.5:
+                continue
+            if language == "ru" and dialogue["model_name"] != "gpt-4" and random.random() > 0.2:
                 continue
             chat = dialogue["chat"]
             for message in chat:
@@ -72,7 +79,7 @@ def main(train_path, val_path):
                 if message["role"] == "operator":
                     message["role"] = "user"
 
-            system_messages = build_char_system_messages(row)
+            system_messages = build_rpr_char_system_messages(row)
             chat = system_messages + chat
             rp_records.append({
                 "messages": chat,
@@ -81,6 +88,24 @@ def main(train_path, val_path):
     print("RPR count:", len(rp_records))
     print("RPR max length:", calc_max_length(rp_records))
     records += rp_records
+
+    pos_records = []
+    for row in tqdm(load_dataset("IlyaGusev/chai_prize_positive_conversations", split="train")):
+        if random.random() > 0.5:
+            continue
+        chat = revert_flattening(row["messages"])
+        char_name = row["char_name"]
+        chat.insert(0, {
+            "role": "system",
+            "content": "You are {char_name}. "
+        })
+        pos_records.append({
+            "messages": chat,
+            "source": "pos_feedback"
+        })
+    print("From positive feedback count:", len(pos_records))
+    print("Pos max length:", calc_max_length(pos_records))
+    records += pos_records
 
     gpteacher_records = []
     for row in tqdm(load_dataset("AlekseyKorshuk/gpteacher-role-play-chatml", split="train")):

@@ -14,7 +14,7 @@ def load_saiga(
     torch_dtype: str = None
 ):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     generation_config = GenerationConfig.from_pretrained(model_name)
 
     adapter_path = os.path.join(model_name, "adapter_config.json")
