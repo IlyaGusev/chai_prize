@@ -21,6 +21,7 @@ def generate(
         padding=True
     )
     data = {k: v.to(model.device) for k, v in data.items()}
+    print(data["input_ids"])
     output_ids = model.generate(
         **data,
         generation_config=generation_config

@@ -1,0 +1,20 @@
+{
+    "rpr_en": {
+        "sample_rate": 1.0,
+        "force_gpt4": true
+    },
+    "rpr_ru": {
+        "sample_rate": 0.1,
+        "force_gpt4": true
+    },
+    "gpteacher": {
+        "sample_rate": 0.0
+    },
+    "pos": {
+        "sample_rate": 0.0
+    },
+    "pippa": {
+        "sample_rate": 0.3,
+        "max_length": 20000
+    }
+}

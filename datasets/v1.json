@@ -1,0 +1,16 @@
+{
+    "rpr_en": {
+        "sample_rate": 0.5,
+        "force_gpt4": true
+    },
+    "rpr_ru": {
+        "sample_rate": 0.1,
+        "force_gpt4": true
+    },
+    "gpteacher": {
+        "sample_rate": 0.2
+    },
+    "pos": {
+        "sample_rate": 0.0
+    }
+}
