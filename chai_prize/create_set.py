@@ -29,6 +29,14 @@ def calc_user_engagement(messages):
     return sum(response_length) / len(response_length)
 
 
+def shrink(chat, max_length):
+    length = calc_max_length([{"messages": chat}])
+    while length > max_length:
+        chat = chat[:-2]
+        length = calc_max_length([{"messages": chat}])
+    return chat
+
+
 def build_rpr_char_system_messages(char):
     name = char["name"]
     greeting = char["greeting"]
@@ -157,10 +165,7 @@ def process_pippa(
         if engagement < min_user_engagement:
             continue
 
-        length = calc_max_length([{"messages": chat}])
-        while length > max_length:
-            chat = chat[:-2]
-            length = calc_max_length([{"messages": chat}])
+        chat = shrink(chat, max_length)
         records.append({
             "messages": chat,
             "char_name": char_name,
@@ -210,11 +215,72 @@ def process_gpteacher(
     return records
 
 
+def process_limarp(
+    sample_rate: float = 1.0,
+    dataset_name: str = "TearGosling/limarp_standardized",
+    max_length: int = 20000
+):
+    current_conversation_id = None
+    current_message_id = None
+    current_chat = []
+    records = []
+    for row in load_dataset(dataset_name, split="train"):
+        message = row["message"]
+        message_type = row["message_type"]
+        conversation_id = row["conversation_id"]
+        message_id = row["message_id"]
+        if current_conversation_id != conversation_id:
+            if current_chat:
+                char_name = current_chat[0]["content"].split("'s")[0]
+                current_chat = shrink(current_chat, max_length)
+                records.append({
+                    "messages": current_chat,
+                    "char_name": char_name,
+                    "source": "limarp"
+                })
+            current_chat = []
+            current_conversation_id = conversation_id
+        if current_chat:
+            assert message_id == current_message_id + 1
+        current_message_id = message_id
+        if message_type == "instruction":
+            role = "system"
+            if random.random() < 0.2:
+                role = "prompt"
+            current_chat.append({
+                "role": role,
+                "content": message
+            })
+        else:
+            content = ":".join(message.split(":")[1:])
+            assert message_type in ("input", "output")
+            role = "user" if message_type == "input" else "bot"
+            current_chat.append({
+                "role": role,
+                "content": content
+            })
+
+    final_records = []
+    for record in records:
+        if random.random() < sample_rate:
+            final_records.append(record)
+    records = final_records
+
+    print("LIMArp count:", len(records))
+    if records:
+        print("LIMArp max length:", calc_max_length(records))
+    return records
+
+
 def main(config_path, output_dir):
     random.seed(42)
     with open(config_path) as r:
         config = json.load(r)
     records = []
+
+    if "limarp" in config:
+        limarp_records = process_limarp(**config["limarp"])
+        records += limarp_records
 
     if "pippa" in config:
         pippa_records = process_pippa(**config["pippa"])
