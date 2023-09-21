@@ -33,5 +33,3 @@ def generate(
         sample_output = sample_output.replace("</s>", "").strip()
         outputs.append(sample_output)
     return outputs
-
-

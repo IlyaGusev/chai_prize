@@ -1,4 +1,3 @@
-import argparse
 import random
 import json
 import os
@@ -7,8 +6,18 @@ import fire
 import wandb
 import torch
 import numpy as np
-from transformers import AutoTokenizer, AutoModelForCausalLM, DataCollatorForTokenClassification
-from transformers import Trainer, TrainingArguments, logging, TrainerCallback, TrainerState, TrainerControl, BitsAndBytesConfig
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    DataCollatorForTokenClassification,
+    Trainer,
+    TrainingArguments,
+    logging,
+    TrainerCallback,
+    TrainerState,
+    TrainerControl,
+    BitsAndBytesConfig
+)
 from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training
 
@@ -19,10 +28,7 @@ from chai_prize.util.io import read_jsonl
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
-class TrainerNoBaseSave(Trainer):
-    def __init__(self, *args, **kwargs):
-        return super().__init__(*args, **kwargs)
-
+class PeftTrainer(Trainer):
     def _save_checkpoint(self, model, trial, metrics=None):
         print("Running custom _save_checkpoint")
         checkpoint_folder = f"{PREFIX_CHECKPOINT_DIR}-{self.state.global_step}"
@@ -101,10 +107,8 @@ def train(
     val_file: str,
     output_dir: str,
     checkpoint: str = None,
-    sample_rate: float = 1.0,
     report_to: str = "wandb",
     seed: int = 42,
-    omit_base_model_save: bool = True
 ):
     set_random_seed(seed)
     logging.set_verbosity_info()
@@ -136,7 +140,7 @@ def train(
         gradient_accumulation_steps = gradient_accumulation_steps // world_size
         trainer_config["gradient_accumulation_steps"] = gradient_accumulation_steps
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer = fix_tokenizer(tokenizer)
     tokenizer.save_pretrained(output_dir)
 
@@ -145,12 +149,8 @@ def train(
     random.shuffle(train_records)
     print(train_records[0])
 
-    model_type = config.get("model_type", "causal")
     templates_path = config["templates_path"]
     only_target_loss = config.get("only_target_loss", True)
-    mode = config.get("mode", "chat")
-    assert mode == "chat", "Only chat mode is supported in new versions!"
-    assert model_type == "causal", "Only causal models are supported in new versions!"
     max_tokens_count = config["max_tokens_count"]
 
     datasets = []
@@ -159,7 +159,6 @@ def train(
             records,
             tokenizer,
             max_tokens_count=max_tokens_count,
-            sample_rate=sample_rate,
             templates_path=templates_path,
             only_target_loss=only_target_loss
         ))
@@ -173,16 +172,13 @@ def train(
     print("LABELS")
     print(data_collator([train_dataset[0], train_dataset[1]])["labels"][0])
 
-    model_types = {
-        "causal": AutoModelForCausalLM,
-    }
     load_in_8bit = bool(config.get("load_in_8bit", False))
     load_in_4bit = bool(config.get("load_in_4bit", False))
     use_bf16 = bool(trainer_config.get("bf16", False))
     torch_dtype = torch.bfloat16 if use_bf16 else torch.float16
     if load_in_8bit:
         assert not load_in_4bit
-        model = model_types[model_type].from_pretrained(
+        model = AutoModelForCausalLM.from_pretrained(
             model_name,
             load_in_8bit=True,
             device_map=device_map,
@@ -193,7 +189,7 @@ def train(
 
     elif load_in_4bit:
         assert not load_in_8bit
-        model = model_types[model_type].from_pretrained(
+        model = AutoModelForCausalLM.from_pretrained(
             model_name,
             load_in_4bit=True,
             device_map=device_map,
@@ -211,11 +207,9 @@ def train(
         model = prepare_model_for_kbit_training(model)
 
     else:
-        model = model_types[model_type].from_pretrained(model_name)
+        model = AutoModelForCausalLM.from_pretrained(model_name)
         model = fix_model(model, tokenizer)
 
-    # Default model generation params
-    model.config.num_beams = 5
     model.config.max_length = max_tokens_count
 
     if not ddp and torch.cuda.device_count() > 1:
@@ -226,7 +220,7 @@ def train(
         lora_config = LoraConfig(**lora_config)
         model = get_peft_model(model, lora_config)
 
-    trainer_class = Trainer if not omit_base_model_save else TrainerNoBaseSave
+    trainer_class = Trainer if not lora_config else PeftTrainer
     print("Trainer class:", trainer_class)
     trainer = trainer_class(
         model=model,

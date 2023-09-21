@@ -1,13 +1,12 @@
 import os
 import json
-import sys
 import random
-import fire
 from pathlib import Path
-from copy import deepcopy
+
+import fire
 from datasets import load_dataset
 from tqdm import tqdm
-from itertools import chain
+
 
 def revert_flattening(records):
     fixed_records = []
@@ -71,7 +70,7 @@ def process_rpr_row(row):
         chat = dialogue["chat"]
         for message in chat:
             if message["role"] == "char":
-                 message["role"] = "bot"
+                message["role"] = "bot"
             if message["role"] == "operator":
                 message["role"] = "user"
 
@@ -88,12 +87,12 @@ def process_rpr_row(row):
 def process_rpr(
     split: str = "en",
     sample_rate: float = 1.0,
-    force_gpt4: bool = True
+    force_gpt4: bool = True,
+    dataset_name: str = "IlyaGusev/gpt_roleplay_realm"
 ):
     records = []
-    for row in tqdm(load_dataset("IlyaGusev/gpt_roleplay_realm", split=split)):
+    for row in tqdm(load_dataset(dataset_name, split=split)):
         for record in process_rpr_row(row):
-            is_passing_random = random.random() < sample_rate
             if force_gpt4 and record["creator"] == "gpt-4":
                 records.append(record)
             elif random.random() < sample_rate:
@@ -101,13 +100,39 @@ def process_rpr(
     return records
 
 
+def process_pos(
+    sample_rate: float = 1.0,
+    dataset_name: str = "IlyaGusev/chai_prize_positive_conversations"
+):
+    records = []
+    for row in tqdm(load_dataset(dataset_name, split="train")):
+        if random.random() > sample_rate:
+            continue
+        chat = revert_flattening(row["messages"])
+        char_name = row["char_name"]
+        chat.insert(0, {
+            "role": "system",
+            "content": "You are {char_name}."
+        })
+        records.append({
+            "messages": chat,
+            "char_name": char_name,
+            "source": "pos_feedback"
+        })
+    print("From positive feedback count:", len(records))
+    if records:
+        print("Pos max length:", calc_max_length(records))
+    return records
+
+
 def process_pippa(
     sample_rate: float = 1.0,
     max_length: int = 20000,
-    min_user_engagement: float = 100.0
+    min_user_engagement: float = 100.0,
+    dataset_name: str = "PygmalionAI/PIPPA"
 ):
     records = []
-    for row in tqdm(load_dataset("PygmalionAI/PIPPA", split="train")):
+    for row in tqdm(load_dataset(dataset_name, split="train")):
         if random.random() > sample_rate:
             continue
         context = row["bot_description"]
@@ -147,6 +172,44 @@ def process_pippa(
     return records
 
 
+def process_gpteacher(
+    sample_rate: float = 1.0,
+    dataset_name: str = "AlekseyKorshuk/gpteacher-role-play-chatml"
+):
+    records = []
+    for row in tqdm(load_dataset(dataset_name, split="train")):
+        if random.random() > sample_rate:
+            continue
+        chat = []
+        for message in row["conversation"]:
+            content = message["content"]
+            role = message["role"]
+            if role == "User":
+                chat.append({
+                    "role": "user",
+                    "content": content
+                })
+            else:
+                chat.append({
+                    "role": "bot",
+                    "content": content
+                })
+        random_number = random.random()
+        if random_number < 0.3:
+            chat[0]["role"] = "system"
+        elif random_number < 0.2:
+            chat[0]["role"] = "prompt"
+        records.append({
+            "messages": chat,
+            "char_name": "bot",
+            "source": "gpteacher"
+        })
+    print("GPTeacher count:", len(records))
+    if records:
+        print("GPTeacher max length:", calc_max_length(records))
+    return records
+
+
 def main(config_path, output_dir):
     random.seed(42)
     with open(config_path) as r:
@@ -169,59 +232,14 @@ def main(config_path, output_dir):
     records += rp_records
 
     # Positive conversations
-    pos_records = []
-    pos_config = config["pos"]
-    for row in tqdm(load_dataset("IlyaGusev/chai_prize_positive_conversations", split="train")):
-        if random.random() > pos_config["sample_rate"]:
-            continue
-        chat = revert_flattening(row["messages"])
-        char_name = row["char_name"]
-        chat.insert(0, {
-            "role": "system",
-            "content": "You are {char_name}."
-        })
-        pos_records.append({
-            "messages": chat,
-            "source": "pos_feedback"
-        })
-    print("From positive feedback count:", len(pos_records))
-    if pos_records:
-        print("Pos max length:", calc_max_length(pos_records))
-    records += pos_records
+    if "pos" in config:
+        pos_records = process_pos(**config["pos"])
+        records += pos_records
 
     # GPTeacher
-    gpteacher_records = []
-    gpteacher_config = config["gpteacher"]
-    for row in tqdm(load_dataset("AlekseyKorshuk/gpteacher-role-play-chatml", split="train")):
-        if random.random() > gpteacher_config["sample_rate"]:
-            continue
-        chat = []
-        for message in row["conversation"]:
-            content = message["content"]
-            role = message["role"]
-            if role == "User":
-                chat.append({
-                    "role": "user",
-                    "content": content
-                })
-            else:
-                chat.append({
-                    "role": "bot",
-                    "content": content
-                })
-        random_number = random.random()
-        if random_number < 0.3:
-            chat[0]["role"] = "system"
-        elif random_number < 0.2:
-            chat[0]["role"] = "prompt"
-        gpteacher_records.append({
-            "messages": chat,
-            "source": "gpteacher"
-        })
-    records += gpteacher_records
-    print("GPTeacher count:", len(gpteacher_records))
-    if gpteacher_records:
-        print("GPTeacher max length:", calc_max_length(gpteacher_records))
+    if "gpteacher" in config:
+        gpteacher_records = process_gpteacher(**config["gpteacher"])
+        records += gpteacher_records
 
     # Final processing
     cleaned_records = []

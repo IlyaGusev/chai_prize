@@ -48,7 +48,6 @@ def process_feedback(output_path):
         char_name = text.split(":")[0]
         current_role = "user"
         current_text = text
-        is_bad_chat = False
         user_name = "Anonymous user"
 
         def parse_message(message, current_role):

@@ -1,17 +1,19 @@
 import json
-from typing import List
-
-DEFAULT_MESSAGE_TEMPLATE = "<s>{role}: {content}</s>"
 
 
 class Conversation:
+    USER_ROLE: str = "user"
+    BOT_ROLE: str = "bot"
+    SYSTEM_ROLE: str = "system"
+    PROMPT_ROLE: str = "prompt"
+
     def __init__(
         self,
-        prompt_message_template: str = DEFAULT_MESSAGE_TEMPLATE,
-        system_message_template: str = DEFAULT_MESSAGE_TEMPLATE,
-        user_message_template: str = DEFAULT_MESSAGE_TEMPLATE,
-        bot_message_template: str = DEFAULT_MESSAGE_TEMPLATE,
-        suffix: str = "<s>bot",
+        prompt_message_template: str,
+        system_message_template: str,
+        user_message_template: str,
+        bot_message_template: str,
+        suffix: str,
         char_name: str = None
     ):
         self.system_message_template = system_message_template
@@ -19,7 +21,6 @@ class Conversation:
         self.bot_message_template = bot_message_template
         self.prompt_message_template = prompt_message_template
         self.suffix = suffix
-
         self.char_name = char_name
 
         self.messages = []
@@ -30,41 +31,33 @@ class Conversation:
             meta["char_name"] = self.char_name
         return meta
 
-    def add_user_message(self, message):
+    def add_message(self, message, role):
         self.messages.append({
-            "role": "user",
+            "role": role,
             "content": message
         })
+
+    def add_user_message(self, message):
+        return self.add_message(message, Conversation.USER_ROLE)
 
     def add_bot_message(self, message):
-        self.messages.append({
-            "role": "bot",
-            "content": message
-        })
+        return self.add_message(message, Conversation.BOT_ROLE)
 
     def add_system_message(self, message):
-        self.messages.append({
-            "role": "system",
-            "content": message
-        })
+        return self.add_message(message, Conversation.SYSTEM_ROLE)
 
     def add_prompt_message(self, message):
-        self.messages.append({
-            "role": "prompt",
-            "content": message
-        })
+        return self.add_message(message, Conversation.PROMPT_ROLE)
 
     def format_message(self, message):
+        mapping = {
+            Conversation.SYSTEM_ROLE: self.system_message_template,
+            Conversation.USER_ROLE: self.user_message_template,
+            Conversation.PROMPT_ROLE: self.prompt_message_template,
+            Conversation.BOT_ROLE: self.bot_message_template
+        }
         content = message["content"]
-        if message["role"] == "system":
-            return self.system_message_template.format(content=content, **self.get_meta())
-        elif message["role"] == "user":
-            return self.user_message_template.format(content=content, **self.get_meta())
-        elif message["role"] == "prompt":
-            return self.prompt_message_template.format(content=content, **self.get_meta())
-        elif message["role"] == "bot":
-            return self.bot_message_template.format(content=content, **self.get_meta())
-        assert False
+        return mapping[message["role"]].format(content=content, **self.get_meta())
 
     def get_prompt(self, tokenizer, add_suffix: bool = True):
         messages = self.messages
@@ -93,17 +86,11 @@ class Conversation:
         )
 
     def expand(self, messages):
-        if messages[0]["role"] == "system":
-            self.messages = []
-
         for message in messages:
-            if message["role"] == "user":
-                self.add_user_message(message["content"])
-            elif message["role"] == "bot":
-                self.add_bot_message(message["content"])
-            elif message["role"] == "system":
-                self.add_system_message(message["content"])
-            elif message["role"] == "prompt":
-                self.add_prompt_message(message["content"])
-            else:
-                assert False
+            assert message["role"] in (
+                Conversation.USER_ROLE,
+                Conversation.BOT_ROLE,
+                Conversation.SYSTEM_ROLE,
+                Conversation.PROMPT_ROLE,
+            )
+            self.add_message(message["content"], message["role"])
