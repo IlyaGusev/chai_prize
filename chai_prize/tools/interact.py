@@ -18,7 +18,7 @@ def interact(model_name, template_path):
             print("History reset completed!")
             continue
         conversation.add_user_message(user_message)
-        prompt = conversation.get_prompt(tokenizer)
+        prompt = conversation.get_prompt()
         print(prompt)
         output = generate(
             model=model,

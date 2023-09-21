@@ -30,6 +30,6 @@
     "templates_path": "prompts/prompt_v2.json",
     "model_name": "models/vicuna-13b-v1.5",
     "model_type": "causal",
-    "max_tokens_count": 3072,
+    "max_tokens_count": 2560,
     "use_flash_optimum": true
 }

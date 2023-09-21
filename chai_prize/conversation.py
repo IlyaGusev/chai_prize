@@ -59,7 +59,7 @@ class Conversation:
         content = message["content"]
         return mapping[message["role"]].format(content=content, **self.get_meta())
 
-    def get_prompt(self, tokenizer, add_suffix: bool = True):
+    def get_prompt(self, add_suffix: bool = True):
         messages = self.messages
 
         final_text = ""
