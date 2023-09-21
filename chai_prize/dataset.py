@@ -20,8 +20,7 @@ class ChatDataset(Dataset):
         only_target_loss: bool = True,
         add_global_bos: bool = True,
         add_global_eos: bool = True,
-        labels_pad_token_id: int = -100,
-        truncation_side: str = "left"
+        labels_pad_token_id: int = -100
     ):
         self.templates_path = templates_path
         self.original_records = original_records
@@ -32,7 +31,6 @@ class ChatDataset(Dataset):
         self.labels_pad_token_id = labels_pad_token_id
         self.add_global_bos = add_global_bos
         self.add_global_eos = add_global_eos
-        self.truncation_side = truncation_side
         self.is_printed = False
 
         self.records = []
@@ -59,7 +57,7 @@ class ChatDataset(Dataset):
         )["input_ids"]
 
     def convert_record(self, record):
-        conversation = Conversation.from_template(self.templates_path)
+        conversation = Conversation.from_template(self.templates_path, char_name=record["char_name"])
         conversation.expand(record["messages"])
 
         input_ids, labels = [], []
@@ -68,18 +66,14 @@ class ChatDataset(Dataset):
             message_labels = message_input_ids
 
             labels_mask = [self.labels_pad_token_id for _ in range(len(message_input_ids))]
-            if role != conversation.bot_role and self.only_target_loss:
+            if role not in (conversation.bot_role, conversation.char_name) and self.only_target_loss:
                 message_labels = labels_mask
+
+            if len(message_input_ids) + len(input_ids) > self.max_tokens_count:
+                break
 
             input_ids.extend(message_input_ids)
             labels.extend(message_labels)
-
-        if self.truncation_side == "right":
-            input_ids = input_ids[:self.max_tokens_count - 2]
-            labels = labels[:self.max_tokens_count - 2]
-        else:
-            input_ids = input_ids[-self.max_tokens_count + 2:]
-            labels = labels[-self.max_tokens_count + 2:]
 
         if self.add_global_bos and input_ids[0] != self.tokenizer.bos_token_id:
             input_ids.insert(0, self.tokenizer.bos_token_id)

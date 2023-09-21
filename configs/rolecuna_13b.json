@@ -17,19 +17,18 @@
         "optim": "adamw_torch"
     },
     "lora": {
-        "r": 16,
+        "r": 4,
         "lora_alpha": 16,
-        "lora_dropout": 0.15,
+        "lora_dropout": 0.1,
         "bias": "none",
-        "target_modules": ["q_proj", "v_proj", "k_proj", "o_proj"],
+        "target_modules": ["q_proj", "v_proj", "k_proj", "o_proj", "up_proj", "down_proj", "gate_proj"],
         "task_type": "CAUSAL_LM"
     },
     "load_in_8bit": true,
     "only_target_loss": true,
     "mode": "chat",
-    "templates_path": "prompts/prompt.json",
+    "templates_path": "prompts/prompt_v2.json",
     "model_name": "models/vicuna-13b-v1.5",
     "model_type": "causal",
-    "max_tokens_count": 2560
+    "max_tokens_count": 2816
 }
-
