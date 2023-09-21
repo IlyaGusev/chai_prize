@@ -8,6 +8,7 @@ accelerate == 0.21.0
 bitsandbytes == 0.40.2
 peft == 0.5.0
 transformers == 4.32.1
+otptimum == 1.13.1
 zstandard
 jsonlines
 wandb

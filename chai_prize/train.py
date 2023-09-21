@@ -8,6 +8,7 @@ import torch
 import numpy as np
 from transformers import (
     AutoTokenizer,
+    AutoConfig,
     AutoModelForCausalLM,
     DataCollatorForTokenClassification,
     Trainer,
@@ -20,6 +21,7 @@ from transformers import (
 )
 from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training
+from optimum.bettertransformer import BetterTransformer
 
 from chai_prize.dataset import ChatDataset
 from chai_prize.util.dl import set_random_seed, fix_tokenizer, fix_model
@@ -106,9 +108,8 @@ def train(
     train_file: str,
     val_file: str,
     output_dir: str,
-    checkpoint: str = None,
     report_to: str = "wandb",
-    seed: int = 42,
+    seed: int = 42
 ):
     set_random_seed(seed)
     logging.set_verbosity_info()
@@ -119,6 +120,7 @@ def train(
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     ddp = world_size != 1
 
+    use_flash_optimum = config.get("use_flash_optimum", False)
     deepspeed_config = config.get("deepspeed")
     trainer_config = config.get("trainer")
     lora_config = config.get("lora")
@@ -141,8 +143,12 @@ def train(
         trainer_config["gradient_accumulation_steps"] = gradient_accumulation_steps
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    tokenizer = fix_tokenizer(tokenizer)
+    model_config = AutoConfig.from_pretrained(model_name)
+    tokenizer = fix_tokenizer(tokenizer, model_config)
     tokenizer.save_pretrained(output_dir)
+
+    if use_flash_optimum:
+        assert tokenizer.padding_side == "right"
 
     train_records = read_jsonl(train_file)
     val_records = read_jsonl(val_file)
@@ -163,7 +169,7 @@ def train(
             only_target_loss=only_target_loss
         ))
     train_dataset, val_dataset = datasets
-    data_collator = DataCollatorForTokenClassification(tokenizer, pad_to_multiple_of=8)
+    data_collator = DataCollatorForTokenClassification(tokenizer)
 
     print("INPUT_IDS")
     print(data_collator([train_dataset[0], train_dataset[1]])["input_ids"][0])
@@ -210,6 +216,9 @@ def train(
         model = AutoModelForCausalLM.from_pretrained(model_name)
         model = fix_model(model, tokenizer)
 
+    if use_flash_optimum:
+        model = BetterTransformer.transform(model)
+
     model.config.max_length = max_tokens_count
 
     if not ddp and torch.cuda.device_count() > 1:
@@ -234,7 +243,17 @@ def train(
     if trainer_config.get("report_to", "wandb") == "wandb":
         wandb.init(project="rulm_self_instruct", name=config_file)
 
-    trainer.train(checkpoint)
+    if use_flash_optimum:
+        with torch.backends.cuda.sdp_kernel(
+            enable_flash=True, enable_math=True, enable_mem_efficient=True
+        ):
+            trainer.train()
+    else:
+        trainer.train()
+
+    if use_flash_optimum:
+        model = BetterTransformer.reverse(model)
+
     model.save_pretrained(output_dir)
 
 
