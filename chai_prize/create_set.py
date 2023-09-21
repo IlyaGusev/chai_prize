@@ -23,6 +23,13 @@ def calc_max_length(records):
     return max([sum([len(m["content"]) for m in r["messages"]]) for r in records])
 
 
+def calc_user_engagement(messages):
+    response_length = [len(m["content"]) for m in messages if m["role"] == "user"]
+    if len(response_length) == 0:
+        return 0.0
+    return sum(response_length) / len(response_length)
+
+
 def build_rpr_char_system_messages(char):
     name = char["name"]
     greeting = char["greeting"]
@@ -94,7 +101,11 @@ def process_rpr(
     return records
 
 
-def process_pippa(sample_rate, max_length):
+def process_pippa(
+    sample_rate: float = 1.0,
+    max_length: int = 20000,
+    min_user_engagement: float = 100.0
+):
     records = []
     for row in tqdm(load_dataset("PygmalionAI/PIPPA", split="train")):
         if random.random() > sample_rate:
@@ -104,8 +115,11 @@ def process_pippa(sample_rate, max_length):
         messages = revert_flattening(row["conversation"])
         system_message = f"You are {char_name}. {context}"
         chat = [{"role": "system", "content": system_message}]
+        role = "prompt"
+        if random.random() < 0.2:
+            role = "bot"
         chat.append({
-            "role": "prompt",
+            "role": role,
             "content": messages[0]["message"]
         })
         for message in messages[1:]:
@@ -114,6 +128,10 @@ def process_pippa(sample_rate, max_length):
                 "role": role,
                 "content": message["message"]
             })
+        engagement = calc_user_engagement(chat[3:])
+        if engagement < min_user_engagement:
+            continue
+
         length = calc_max_length([{"messages": chat}])
         while length > max_length:
             chat = chat[:-2]
