@@ -2,6 +2,7 @@ import os
 import json
 import random
 from pathlib import Path
+from statistics import median
 
 import fire
 from datasets import load_dataset
@@ -26,7 +27,7 @@ def calc_user_engagement(messages):
     response_length = [len(m["content"]) for m in messages if m["role"] == "user"]
     if len(response_length) == 0:
         return 0.0
-    return sum(response_length) / len(response_length)
+    return median(response_length)
 
 
 def shrink(chat, max_length):
@@ -110,18 +111,26 @@ def process_rpr(
 
 def process_pos(
     sample_rate: float = 1.0,
-    dataset_name: str = "IlyaGusev/chai_prize_positive_conversations"
+    dataset_name: str = "IlyaGusev/chai_prize_positive_conversations",
+    min_user_engagement: float = 100.0,
+    max_length: int = 6000
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split="train")):
         if random.random() > sample_rate:
             continue
         chat = revert_flattening(row["messages"])
+        engagement = calc_user_engagement(chat[3:])
+        if engagement < min_user_engagement:
+            continue
+
         char_name = row["char_name"]
         chat.insert(0, {
             "role": "system",
-            "content": "You are {char_name}."
+            "content": f"You are {char_name}."
         })
+
+        chat = shrink(chat, max_length)
         records.append({
             "messages": chat,
             "char_name": char_name,
@@ -223,6 +232,7 @@ def process_limarp(
     current_conversation_id = None
     current_message_id = None
     current_chat = []
+    current_char_name = None
     records = []
     for row in load_dataset(dataset_name, split="train"):
         message = row["message"]
@@ -231,11 +241,10 @@ def process_limarp(
         message_id = row["message_id"]
         if current_conversation_id != conversation_id:
             if current_chat:
-                char_name = current_chat[0]["content"].split("'s")[0]
                 current_chat = shrink(current_chat, max_length)
                 records.append({
                     "messages": current_chat,
-                    "char_name": char_name,
+                    "char_name": current_char_name,
                     "source": "limarp"
                 })
             current_chat = []
@@ -247,6 +256,9 @@ def process_limarp(
             role = "system"
             if random.random() < 0.2:
                 role = "prompt"
+            current_char_name = message.split("'s")[0]
+            if random.random() < 0.5:
+                message = f"You are {current_char_name}. {message}"
             current_chat.append({
                 "role": role,
                 "content": message
