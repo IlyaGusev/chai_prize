@@ -38,6 +38,11 @@ def shrink(chat, max_length):
     return chat
 
 
+def has_bot_message(chat):
+    roles = {m["role"] for m in chat}
+    return "bot" in roles
+
+
 def build_rpr_char_system_messages(char):
     name = char["name"]
     greeting = char["greeting"]
@@ -131,6 +136,9 @@ def process_pos(
         })
 
         chat = shrink(chat, max_length)
+        if not has_bot_message(chat):
+            continue
+
         records.append({
             "messages": chat,
             "char_name": char_name,
@@ -175,6 +183,9 @@ def process_pippa(
             continue
 
         chat = shrink(chat, max_length)
+        if not has_bot_message(chat):
+            continue
+
         records.append({
             "messages": chat,
             "char_name": char_name,
@@ -274,6 +285,8 @@ def process_limarp(
 
     final_records = []
     for record in records:
+        if not has_bot_message(record["messages"]):
+            continue
         if random.random() < sample_rate:
             final_records.append(record)
     records = final_records

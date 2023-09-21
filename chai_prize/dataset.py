@@ -68,6 +68,9 @@ class ChatDataset(Dataset):
             input_ids.extend(message_input_ids)
             labels.extend(message_labels)
 
+        if len(set(labels)) <= 2:
+            return None
+
         if input_ids[0] != self.tokenizer.bos_token_id:
             input_ids.insert(0, self.tokenizer.bos_token_id)
             labels.insert(0, self.labels_pad_token_id)

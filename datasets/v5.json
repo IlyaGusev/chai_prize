@@ -1,6 +1,6 @@
 {
     "rpr_en": {
-        "sample_rate": 0.5,
+        "sample_rate": 1.0,
         "force_gpt4": true
     },
     "rpr_ru": {
@@ -12,12 +12,12 @@
         "min_user_engagement": 30.0
     },
     "pippa": {
-        "sample_rate": 0.7,
+        "sample_rate": 1.0,
         "min_user_engagement": 90.0,
-        "max_length": 6000
+        "max_length": 8000
     },
     "limarp": {
         "sample_rate": 1.0,
-        "max_length": 6000
+        "max_length": 8000
     }
 }
