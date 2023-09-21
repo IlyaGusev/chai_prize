@@ -1,7 +1,7 @@
 {
     "system_message_template": "<s>system: {content}</s>",
+    "prompt_message_template": "<s>prompt: {content}</s>",
     "user_message_template": "<s>User: {content}</s>",
     "bot_message_template": "<s>{char_name}: {content}</s>",
-    "prompt_message_template": "<s>prompt: {content}</s>",
     "suffix": "<s>{char_name}:"
 }
