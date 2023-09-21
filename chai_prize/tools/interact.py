@@ -7,8 +7,8 @@ from chai_prize.util.generate import generate
 
 def interact(model_name, template_path):
     model, tokenizer, generation_config = load_saiga(model_name)
-    conversation = Conversation.from_template(template_path, char_name=char_name)
     char_name = input("Character name: ")
+    conversation = Conversation.from_template(template_path, char_name=char_name)
     system_message = input("System: ")
     conversation.add_system_message(system_message)
     while True:

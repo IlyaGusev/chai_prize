@@ -14,4 +14,4 @@ class CustomFormatterV2(PromptFormatter):
     prompt_template = "<s>prompt: {prompt}</s>"
     bot_template = "<s>{bot_name}: {message}</s>"
     user_template = "<s>User: {message}</s>"
-    response_template = "<s>{bot_name}"
+    response_template = "<s>{bot_name}:"

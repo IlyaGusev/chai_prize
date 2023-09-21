@@ -1,21 +1,22 @@
 import json
 import chai_guanaco as chai
-from chai_prize.formatter import RPRFormatter
+from chai_prize.formatter import CustomFormatterV2
 
-model_url = "IlyaGusev/roleorca_13b_v1"
+model_url = "IlyaGusev/rolecuna_13b_v4"
 
 generation_params = {
-    "frequency_penalty": 1.17,
+    "frequency_penalty": 1.2,
     "presence_penalty": 0.0,
     "temperature": 1.0,
-    "top_p": 0.85,
-    "top_k": 40
+    "top_p": 0.9,
+    "top_k": 50
 }
+
 submission_parameters = {
     "model_repo": model_url,
     "generation_params": generation_params,
-    "model_name": "roleorca_13b_v1",
-    "formatter": RPRFormatter()
+    "model_name": "rolecuna_13b_v4",
+    "formatter": CustomFormatterV2()
 }
 
 submitter = chai.ModelSubmitter()
