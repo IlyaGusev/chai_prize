@@ -173,7 +173,8 @@ def process_pippa(
     min_user_engagement: float = 50.0,
     dataset_name: str = "PygmalionAI/PIPPA",
     min_num_bot_questions: int = 0,
-    include_random_roles: bool = True
+    include_random_roles: bool = True,
+    min_score: int = 0
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split="train")):
@@ -214,6 +215,11 @@ def process_pippa(
         chat = shrink(chat, max_length)
         if not has_bot_message(chat):
             continue
+
+        if "role_play_score" in row:
+            score = row["role_play_score"] + row["consciousness_score"] + row["user_engagement_score"]
+            if score < min_score:
+                continue
 
         records.append({
             "messages": chat,
