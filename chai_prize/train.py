@@ -251,9 +251,6 @@ def train(
     else:
         trainer.train()
 
-    if use_flash_optimum:
-        model = BetterTransformer.reverse(model)
-
     model.save_pretrained(output_dir)
 
 
