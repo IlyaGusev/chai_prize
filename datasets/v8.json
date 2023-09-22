@@ -1,0 +1,18 @@
+{
+    "pippa": {
+        "sample_rate": 1.0,
+        "min_user_engagement": 0.0,
+        "min_num_bot_questions": 0,
+        "max_length": 8000,
+        "min_score": 24,
+        "dataset_name": "IlyaGusev/pippa_scored"
+    },
+    "pos": {
+        "sample_rate": 1.0,
+        "min_user_engagement": 0.0,
+        "min_num_bot_questions": 0,
+        "max_length": 8000,
+        "min_score": 22,
+        "dataset_name": "IlyaGusev/chai_scored"
+    }
+}
