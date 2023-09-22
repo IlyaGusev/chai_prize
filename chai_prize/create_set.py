@@ -129,7 +129,7 @@ def process_rpr(
 def process_pos(
     sample_rate: float = 1.0,
     dataset_name: str = "IlyaGusev/chai_prize_positive_conversations",
-    min_user_engagement: float = 100.0,
+    min_user_engagement: float = 50.0,
     max_length: int = 6000,
     min_num_bot_questions: int = 0
 ):
@@ -170,9 +170,10 @@ def process_pos(
 def process_pippa(
     sample_rate: float = 1.0,
     max_length: int = 20000,
-    min_user_engagement: float = 100.0,
+    min_user_engagement: float = 50.0,
     dataset_name: str = "PygmalionAI/PIPPA",
-    min_num_bot_questions: int = 0
+    min_num_bot_questions: int = 0,
+    include_random_roles: bool = True
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split="train")):
@@ -184,7 +185,7 @@ def process_pippa(
         system_message = f"You are {char_name}. {context}"
         chat = [{"role": "system", "content": system_message}]
         role = "prompt"
-        if random.random() < 0.2:
+        if include_random_roles and random.random() < 0.2:
             role = "bot"
         chat.append({
             "role": role,
@@ -217,6 +218,10 @@ def process_pippa(
         records.append({
             "messages": chat,
             "char_name": char_name,
+            "bot_id": row["bot_id"],
+            "submission_timestamp": int(row["submission_timestamp"].timestamp()),
+            "bot_definitions": row["bot_definitions"],
+            "categories": row["categories"],
             "source": "pippa"
         })
     print("PIPPA count:", len(records))
