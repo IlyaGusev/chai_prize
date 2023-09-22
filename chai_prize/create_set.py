@@ -152,13 +152,21 @@ def process_pos(
             "content": f"You are {char_name}."
         })
 
+        if chat[1]["role"] == "prompt":
+            chat[1]["role"] = "bot"
         chat = shrink(chat, max_length)
         if not has_bot_message(chat):
+            continue
+
+        bot_messages = [m["content"] for m in chat if m["role"] == "user"]
+        uniq_bot_messages = set(bot_messages)
+        if len(uniq_bot_messages) < len(bot_messages):
             continue
 
         records.append({
             "messages": chat,
             "char_name": char_name,
+            "conversation_id": row["conversation_id"],
             "source": "pos_feedback"
         })
     print("From positive feedback count:", len(records))
@@ -173,7 +181,6 @@ def process_pippa(
     min_user_engagement: float = 50.0,
     dataset_name: str = "PygmalionAI/PIPPA",
     min_num_bot_questions: int = 0,
-    include_random_roles: bool = True,
     min_score: int = 0
 ):
     records = []
@@ -185,14 +192,22 @@ def process_pippa(
         messages = revert_flattening(row["conversation"])
         system_message = f"You are {char_name}. {context}"
         chat = [{"role": "system", "content": system_message}]
-        role = "prompt"
-        if include_random_roles and random.random() < 0.2:
-            role = "bot"
-        chat.append({
-            "role": role,
-            "content": messages[0]["message"]
-        })
-        for message in messages[1:]:
+
+        prompt = row["bot_definitions"]
+        prompt = prompt.split("END_OF_DIALOG")[0]
+        prompt = prompt.replace("{{user}}", "User")
+        prompt = prompt.replace("{{random_user_1}}", "User")
+        prompt = prompt.replace("{{random_user_2}}", "User")
+        prompt = prompt.replace("{{random_user_3}}", "User")
+        prompt = prompt.replace("{{char}}", char_name)
+        prompt = prompt.strip()
+        if prompt:
+            chat.append({
+                "role": "prompt",
+                "content": prompt
+            })
+
+        for message in messages:
             role = "user" if message["is_human"] else "bot"
             content = message["message"]
             content = content if role == "user" else clean_bot_message(content)

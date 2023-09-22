@@ -63,24 +63,34 @@ def get_pippa_key(record):
     return (record["submission_timestamp"], record["bot_id"])
 
 
+def get_chai_key(record):
+    return (record["conversation_id"], )
+
+
 def main(
     input_path,
     output_path,
     template_path,
     model_name="gpt-4",
-    request_batch_size=1
+    request_batch_size=2,
+    dataset_name="pippa"
 ):
     existing_keys = set()
     output_records = list()
+    keys_mapping = {
+        "pippa": get_pippa_key,
+        "chai": get_chai_key
+    }
+    get_key = keys_mapping[dataset_name]
     if os.path.exists(output_path):
         output_records = read_jsonl(output_path)
-        existing_keys = {get_pippa_key(r) for r in output_records}
+        existing_keys = {get_key(r) for r in output_records}
     print(f"Existing keys: {len(existing_keys)}")
 
     batch = []
     records = read_jsonl(input_path)
     for record in tqdm(records):
-        key = get_pippa_key(record)
+        key = get_key(record)
         if key in existing_keys:
             continue
         batch.append(record)
