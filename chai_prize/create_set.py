@@ -220,7 +220,6 @@ def process_pippa(
             "char_name": char_name,
             "bot_id": row["bot_id"],
             "submission_timestamp": int(row["submission_timestamp"].timestamp()),
-            "bot_definitions": row["bot_definitions"],
             "categories": row["categories"],
             "source": "pippa"
         })
