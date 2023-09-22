@@ -8,7 +8,7 @@
         "save_steps": 4,
         "logging_steps": 1,
         "learning_rate": 0.0003,
-        "num_train_epochs": 1,
+        "num_train_epochs": 3,
         "lr_scheduler_type": "cosine",
         "warmup_steps": 4,
         "fp16": false,
