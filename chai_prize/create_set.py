@@ -131,7 +131,8 @@ def process_pos(
     dataset_name: str = "IlyaGusev/chai_prize_positive_conversations",
     min_user_engagement: float = 50.0,
     max_length: int = 6000,
-    min_num_bot_questions: int = 0
+    min_num_bot_questions: int = 0,
+    min_score: int = 0
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split="train")):
@@ -147,16 +148,26 @@ def process_pos(
             continue
 
         char_name = row["char_name"]
-        chat.insert(0, {
-            "role": "system",
-            "content": f"You are {char_name}."
-        })
+        if chat[0]["role"] != "system":
+            chat.insert(0, {
+                "role": "system",
+                "content": f"You are {char_name}."
+            })
 
-        if chat[1]["role"] == "prompt":
+        if chat[1]["role"] == "prompt" and chat[2]["role"] == "user":
             chat[1]["role"] = "bot"
+            chat.insert({
+                "role": "prompt",
+                "content": ""
+            })
         chat = shrink(chat, max_length)
         if not has_bot_message(chat):
             continue
+
+        if "role_play_score" in row:
+            score = row["role_play_score"] + row["consciousness_score"] + row["user_engagement_score"]
+            if score < min_score:
+                continue
 
         bot_messages = [m["content"] for m in chat if m["role"] == "user"]
         uniq_bot_messages = set(bot_messages)
@@ -201,11 +212,10 @@ def process_pippa(
         prompt = prompt.replace("{{random_user_3}}", "User")
         prompt = prompt.replace("{{char}}", char_name)
         prompt = prompt.strip()
-        if prompt:
-            chat.append({
-                "role": "prompt",
-                "content": prompt
-            })
+        chat.append({
+            "role": "prompt",
+            "content": prompt
+        })
 
         for message in messages:
             role = "user" if message["is_human"] else "bot"
