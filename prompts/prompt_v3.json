@@ -1,0 +1,7 @@
+{
+    "system_message_template": "{char_name}'s Persona: {content}\n####",
+    "prompt_message_template": "\n{content}\n<START>",
+    "user_message_template": "\nUser: {content}",
+    "bot_message_template": "\n{char_name}: {content}",
+    "suffix": "\n{char_name}:"
+}

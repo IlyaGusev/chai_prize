@@ -16,7 +16,9 @@ class ChatDataset(Dataset):
         max_tokens_count: int,
         templates_path: str,
         only_target_loss: bool = True,
-        labels_pad_token_id: int = -100
+        labels_pad_token_id: int = -100,
+        add_global_eos: bool = True,
+        add_global_linebreak: bool = False
     ):
         self.templates_path = templates_path
         self.original_records = original_records
@@ -24,6 +26,8 @@ class ChatDataset(Dataset):
         self.max_tokens_count = max_tokens_count
         self.only_target_loss = only_target_loss
         self.labels_pad_token_id = labels_pad_token_id
+        self.add_global_eos = add_global_eos
+        self.add_global_linebreak = add_global_linebreak
         self.is_printed = False
 
         self.records = []
@@ -56,12 +60,13 @@ class ChatDataset(Dataset):
             message_input_ids = self.get_tokens(message)
 
             # Truncate
-            if len(message_input_ids) + len(input_ids) > self.max_tokens_count:
+            if len(message_input_ids) + len(input_ids) > self.max_tokens_count - 1:
                 break
 
             message_labels = message_input_ids
 
             labels_mask = [self.labels_pad_token_id for _ in range(len(message_input_ids))]
+            labels_mask[:2] = message_input_ids[:2]
             if role != Conversation.BOT_ROLE and self.only_target_loss:
                 message_labels = labels_mask
 
@@ -75,9 +80,17 @@ class ChatDataset(Dataset):
             input_ids.insert(0, self.tokenizer.bos_token_id)
             labels.insert(0, self.labels_pad_token_id)
 
-        if input_ids[-1] != self.tokenizer.eos_token_id:
+        if self.add_global_eos and input_ids[-1] != self.tokenizer.eos_token_id:
             input_ids.append(self.tokenizer.eos_token_id)
             labels.append(self.tokenizer.eos_token_id)
+
+        linebreak_token_id = self.tokenizer.encode("\n\n\n\n")[-1]
+        if self.add_global_linebreak and input_ids[-1] != linebreak_token_id:
+            input_ids.append(linebreak_token_id)
+            if labels[-1] != self.labels_pad_token_id:
+                labels.append(linebreak_token_id)
+            else:
+                labels.append(self.labels_pad_token_id)
 
         if not self.is_printed:
             print(input_ids)
@@ -88,7 +101,8 @@ class ChatDataset(Dataset):
         input_ids = torch.LongTensor(input_ids)
         labels = torch.LongTensor(labels)
         attention_mask = input_ids.new_ones(input_ids.size())
-        assert input_ids.size(0) == labels.size(0) == attention_mask.size(0) <= self.max_tokens_count
+        assert input_ids.size(0) == labels.size(0) == attention_mask.size(0)
+        assert input_ids.size(0) <= self.max_tokens_count
 
         return {
             "input_ids": input_ids,
