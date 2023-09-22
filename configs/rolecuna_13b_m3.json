@@ -8,7 +8,7 @@
         "save_steps": 4,
         "logging_steps": 1,
         "learning_rate": 0.0003,
-        "num_train_epochs": 1,
+        "num_train_epochs": 3,
         "lr_scheduler_type": "cosine",
         "warmup_steps": 4,
         "fp16": false,
@@ -28,7 +28,7 @@
     "only_target_loss": true,
     "mode": "chat",
     "templates_path": "prompts/prompt_v2.json",
-    "model_name": "models/anhnv125_llama_v8",
+    "model_name": "models/vicuna-13b-v1.5",
     "model_type": "causal",
     "max_tokens_count": 2560
 }
