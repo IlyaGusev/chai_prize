@@ -1,0 +1,11 @@
+{
+    "model_url": "IlyaGusev/rolemax_13b_v4_m2",
+    "generation_params": {
+        "frequency_penalty": 1.2,
+        "presence_penalty": 0.0,
+        "temperature": 1.0,
+        "top_p": 0.9,
+        "top_k": 50
+    },
+    "submission_id": "ilyagusev-rolemax-13b-v4-m2_v1"
+}
