@@ -25,9 +25,14 @@ def calc_max_length(records):
 
 def calc_user_engagement(messages):
     response_length = [len(m["content"]) for m in messages if m["role"] == "user"]
-    if len(response_length) == 0:
+    if len(response_length) <= 1:
         return 0.0
+    response_length = response_length[1:]
     return median(response_length)
+
+
+def calc_bot_questions(messages):
+    return sum([int("?" in m["content"]) for m in messages if m["role"] == "bot"])
 
 
 def shrink(chat, max_length):
@@ -41,6 +46,13 @@ def shrink(chat, max_length):
 def has_bot_message(chat):
     roles = {m["role"] for m in chat}
     return "bot" in roles
+
+
+def clean_bot_message(text):
+    text = " ".join(text.split())
+    text = text.replace('“', '"')
+    text = text.replace('”', '"')
+    return text
 
 
 def build_rpr_char_system_messages(char):
@@ -118,15 +130,20 @@ def process_pos(
     sample_rate: float = 1.0,
     dataset_name: str = "IlyaGusev/chai_prize_positive_conversations",
     min_user_engagement: float = 100.0,
-    max_length: int = 6000
+    max_length: int = 6000,
+    min_num_bot_questions: int = 0
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split="train")):
         if random.random() > sample_rate:
             continue
         chat = revert_flattening(row["messages"])
-        engagement = calc_user_engagement(chat[3:])
+
+        engagement = calc_user_engagement(chat)
         if engagement < min_user_engagement:
+            continue
+        num_bot_questions = calc_bot_questions(chat)
+        if num_bot_questions < min_num_bot_questions:
             continue
 
         char_name = row["char_name"]
@@ -154,7 +171,8 @@ def process_pippa(
     sample_rate: float = 1.0,
     max_length: int = 20000,
     min_user_engagement: float = 100.0,
-    dataset_name: str = "PygmalionAI/PIPPA"
+    dataset_name: str = "PygmalionAI/PIPPA",
+    min_num_bot_questions: int = 0
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split="train")):
@@ -174,12 +192,22 @@ def process_pippa(
         })
         for message in messages[1:]:
             role = "user" if message["is_human"] else "bot"
+            content = message["message"]
+            content = content if role == "user" else clean_bot_message(content)
             chat.append({
                 "role": role,
-                "content": message["message"]
+                "content": content,
             })
-        engagement = calc_user_engagement(chat[3:])
+
+        if sum(["{{user}}" in message["message"] for message in messages[1:]]) > 0:
+            continue
+
+        engagement = calc_user_engagement(chat)
         if engagement < min_user_engagement:
+            continue
+
+        num_bot_questions = calc_bot_questions(chat)
+        if num_bot_questions < min_num_bot_questions:
             continue
 
         chat = shrink(chat, max_length)
@@ -317,10 +345,11 @@ def main(config_path, output_dir):
         rp_records += process_rpr("en", **config["rpr_en"])
     if "rpr_ru" in config:
         rp_records += process_rpr("ru", **config["rpr_ru"])
-    print("RPR count:", len(rp_records))
     if rp_records:
-        print("RPR max length:", calc_max_length(rp_records))
-    records += rp_records
+        print("RPR count:", len(rp_records))
+        if rp_records:
+            print("RPR max length:", calc_max_length(rp_records))
+        records += rp_records
 
     # Positive conversations
     if "pos" in config:
