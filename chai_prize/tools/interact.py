@@ -11,6 +11,8 @@ def interact(model_name, template_path):
     conversation = Conversation.from_template(template_path, char_name=char_name)
     system_message = input("System: ")
     conversation.add_system_message(system_message)
+    conversation.add_prompt_message("")
+    conversation.add_bot_message("Hi!")
     while True:
         user_message = input("User: ")
         if user_message.strip() == "/reset":
