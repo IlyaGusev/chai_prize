@@ -6,8 +6,22 @@ from chai_prize.util.io import read_jsonl, write_jsonl
 from chai_prize.create_set import revert_flattening, clean_bot_message
 
 
+def clean_message(message):
+    message = " ".join(message.split())
+    return message
+
+
 def get_pippa_key(record):
-    return (record["submission_timestamp"], record["bot_id"], record["messages"][2]["content"], record["messages"][3]["content"])
+    user_message = None
+    user_message_idx = 0
+    for i, message in enumerate(record["messages"]):
+        if message["role"] == "user":
+            user_message = clean_message(message["content"])
+            user_message_idx = i
+            break
+    bot_message = record["messages"][user_message_idx+1]["content"]
+    bot_message = clean_message(bot_message)
+    return (record["submission_timestamp"], record["bot_id"], user_message, bot_message)
 
 
 def merge_pippa_output(input_path, original_path, output_path):
@@ -21,11 +35,11 @@ def merge_pippa_output(input_path, original_path, output_path):
         bot_id = row["bot_id"]
         submission_timestamp = int(row["submission_timestamp"]) // 1000
 
-        #row["conversation"] = revert_flattening(row["conversation"])
         if len(row["conversation"]) < 3:
             continue
-        bot_message = clean_bot_message(row["conversation"][2]["message"])
-        key = (submission_timestamp, bot_id, row["conversation"][1]["message"], bot_message)
+        bot_message = clean_message(clean_bot_message(row["conversation"][2]["message"]))
+        user_message = clean_message(row["conversation"][1]["message"])
+        key = (submission_timestamp, bot_id, user_message, bot_message)
         if key not in rated_records:
             continue
 

@@ -1,7 +1,7 @@
 {
-    "system_message_template": "{char_name}'s Persona: {content}\n####",
-    "prompt_message_template": "\n{content}\n<START>",
-    "user_message_template": "\nUser: {content}",
-    "bot_message_template": "\n{char_name}: {content}",
-    "suffix": "\n{char_name}:"
+    "system_message_template": "{char_name}'s Persona: {content}\n####\n",
+    "prompt_message_template": "{content}\n<START>\n",
+    "user_message_template": "User: {content}\n",
+    "bot_message_template": "{char_name}: {content}\n",
+    "suffix": "{char_name}:"
 }

@@ -27,7 +27,8 @@ def interact(model_name, template_path):
             model=model,
             tokenizer=tokenizer,
             prompts=[prompt],
-            generation_config=generation_config
+            generation_config=generation_config,
+            eos_token_id=13
         )[0]
         conversation.add_bot_message(output)
         print("Bot:", output)

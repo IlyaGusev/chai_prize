@@ -21,7 +21,6 @@ from transformers import (
 )
 from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training
-from optimum.bettertransformer import BetterTransformer
 
 from chai_prize.dataset import ChatDataset
 from chai_prize.util.dl import set_random_seed, fix_tokenizer, fix_model
@@ -120,7 +119,6 @@ def train(
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     ddp = world_size != 1
 
-    use_flash_optimum = config.get("use_flash_optimum", False)
     deepspeed_config = config.get("deepspeed")
     trainer_config = config.get("trainer")
     lora_config = config.get("lora")
@@ -146,9 +144,6 @@ def train(
     model_config = AutoConfig.from_pretrained(model_name)
     tokenizer = fix_tokenizer(tokenizer, model_config)
     tokenizer.save_pretrained(output_dir)
-
-    if use_flash_optimum:
-        assert tokenizer.padding_side == "right"
 
     train_records = read_jsonl(train_file)
     val_records = read_jsonl(val_file)
@@ -184,6 +179,7 @@ def train(
 
     load_in_8bit = bool(config.get("load_in_8bit", False))
     load_in_4bit = bool(config.get("load_in_4bit", False))
+    use_flash_attention_2 = bool(config.get("use_flash_attention_2", True))
     use_bf16 = bool(trainer_config.get("bf16", False))
     torch_dtype = torch.bfloat16 if use_bf16 else torch.float16
     if load_in_8bit:
@@ -192,7 +188,8 @@ def train(
             model_name,
             load_in_8bit=True,
             device_map=device_map,
-            torch_dtype=torch_dtype
+            torch_dtype=torch_dtype,
+            use_flash_attention_2=use_flash_attention_2
         )
         model = fix_model(model, tokenizer, use_resize=False)
         model = custom_prepare_model_for_int8_training(model)
@@ -220,9 +217,6 @@ def train(
         model = AutoModelForCausalLM.from_pretrained(model_name)
         model = fix_model(model, tokenizer)
 
-    if use_flash_optimum:
-        model = BetterTransformer.transform(model)
-
     model.config.max_length = max_tokens_count
 
     if not ddp and torch.cuda.device_count() > 1:
@@ -247,14 +241,7 @@ def train(
     if trainer_config.get("report_to", "wandb") == "wandb":
         wandb.init(project="rulm_self_instruct", name=config_file)
 
-    if use_flash_optimum:
-        with torch.backends.cuda.sdp_kernel(
-            enable_flash=True, enable_math=True, enable_mem_efficient=True
-        ):
-            trainer.train()
-    else:
-        trainer.train()
-
+    trainer.train()
     model.save_pretrained(output_dir)
 
 

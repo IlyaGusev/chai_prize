@@ -9,6 +9,9 @@ from datasets import load_dataset
 from tqdm import tqdm
 
 
+DEFAULT_SYSTEM_TEMPLATE = "{char_name}'s Persona: {content}"
+
+
 def revert_flattening(records):
     fixed_records = []
     for key, values in records.items():
@@ -55,53 +58,47 @@ def clean_bot_message(text):
     return text
 
 
-def build_rpr_char_system_messages(char):
-    name = char["name"]
-    greeting = char["greeting"]
-    context = char["context"]
-    example_dialogue = char["example_dialogue"]
+def has_repetition(chat):
+    bot_messages = [m["content"] for m in chat if m["role"] == "bot"]
+    uniq_bot_messages = set(bot_messages)
+    return len(uniq_bot_messages) < len(bot_messages)
 
-    full_context = ""
-    if random.random() < 0.5:
-        full_context += f"You are {name}. "
-    full_context += f"{context}"
 
-    chat = []
-    if random.random() < 0.2:
-        full_context += f"\nYour greeting: {greeting}"
-        chat.append({
-            "role": "bot",
-            "content": greeting
-        })
-    if random.random() < 0.2:
-        mapping = {
-            "user": "user",
-            "char": "bot"
-        }
-        example_messages = [f'{mapping[m["role"]]}: {m["content"]}' for m in example_dialogue]
-        full_context += "\nDialogue example:\n" + "\n".join(example_messages)
+def process_rpr_row(row, system_template):
+    name = row["name"]
+    greeting = row["greeting"]
+    context = row["context"]
+    example_dialogue = row["example_dialogue"]
 
-    role = "system"
-    if random.random() < 0.2:
-        role = "prompt"
-    chat.insert(0, {
-        "role": role,
-        "content": full_context
+    system_message = system_template.format(char_name=name, content=context)
+    chat = [{
+        "role": "system",
+        "content": system_message
+    }]
+
+    mapping = {
+        "user": "User",
+        "char": name
+    }
+    prompt = [f'{mapping[m["role"]]}: {m["content"]}' for m in example_dialogue]
+    prompt = "\n".join(prompt)
+    chat.append({
+        "role": "prompt",
+        "content": prompt
     })
-    return chat
+    chat.append({
+        "role": "bot",
+        "content": greeting
+    })
 
-
-def process_rpr_row(row):
     for dialogue in row["dialogues"]:
-        chat = dialogue["chat"]
+        chat += dialogue["chat"]
         for message in chat:
             if message["role"] == "char":
                 message["role"] = "bot"
             if message["role"] == "operator":
                 message["role"] = "user"
 
-        system_messages = build_rpr_char_system_messages(row)
-        chat = system_messages + chat
         yield {
             "messages": chat,
             "creator": dialogue["model_name"],
@@ -114,11 +111,13 @@ def process_rpr(
     split: str = "en",
     sample_rate: float = 1.0,
     force_gpt4: bool = True,
-    dataset_name: str = "IlyaGusev/gpt_roleplay_realm"
+    dataset_name: str = "IlyaGusev/gpt_roleplay_realm",
+    system_template: str = DEFAULT_SYSTEM_TEMPLATE,
+    **kwargs
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split=split)):
-        for record in process_rpr_row(row):
+        for record in process_rpr_row(row, system_template):
             if force_gpt4 and record["creator"] == "gpt-4":
                 records.append(record)
             elif random.random() < sample_rate:
@@ -132,7 +131,9 @@ def process_pos(
     min_user_engagement: float = 50.0,
     max_length: int = 6000,
     min_num_bot_questions: int = 0,
-    min_score: int = 0
+    min_score: int = 0,
+    system_template: str = DEFAULT_SYSTEM_TEMPLATE,
+    **kwargs
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split="train")):
@@ -151,12 +152,14 @@ def process_pos(
         if chat[0]["role"] != "system":
             chat.insert(0, {
                 "role": "system",
-                "content": f"You are {char_name}."
+                "content": system_template.format(char_name=char_name, content="")
             })
+        else:
+            chat[0]["content"] = system_template.format(char_name=char_name, content="")
 
         if chat[1]["role"] == "prompt" and chat[2]["role"] == "user":
             chat[1]["role"] = "bot"
-            chat.insert({
+            chat.insert(1, {
                 "role": "prompt",
                 "content": ""
             })
@@ -169,9 +172,7 @@ def process_pos(
             if score < min_score:
                 continue
 
-        bot_messages = [m["content"] for m in chat if m["role"] == "user"]
-        uniq_bot_messages = set(bot_messages)
-        if len(uniq_bot_messages) < len(bot_messages):
+        if has_repetition(chat):
             continue
 
         records.append({
@@ -192,7 +193,10 @@ def process_pippa(
     min_user_engagement: float = 50.0,
     dataset_name: str = "PygmalionAI/PIPPA",
     min_num_bot_questions: int = 0,
-    min_score: int = 0
+    min_score: int = 0,
+    system_template: str = DEFAULT_SYSTEM_TEMPLATE,
+    use_random_roles: bool = False,
+    **kwargs
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split="train")):
@@ -201,21 +205,28 @@ def process_pippa(
         context = row["bot_description"]
         char_name = row["bot_name"]
         messages = revert_flattening(row["conversation"])
-        system_message = f"You are {char_name}. {context}"
+        system_message = system_template.format(char_name=char_name, content=context)
         chat = [{"role": "system", "content": system_message}]
 
         prompt = row["bot_definitions"]
         prompt = prompt.split("END_OF_DIALOG")[0]
         prompt = prompt.replace("{{user}}", "User")
-        prompt = prompt.replace("{{random_user_1}}", "User")
-        prompt = prompt.replace("{{random_user_2}}", "User")
-        prompt = prompt.replace("{{random_user_3}}", "User")
+        prompt = prompt.replace("{{user}", "User")
+        prompt = prompt.replace("{{u01}}", "User")
+        for i in range(20):
+            prompt = prompt.replace("{{random_user_" + str(i) + "}}", "User")
         prompt = prompt.replace("{{char}}", char_name)
         prompt = prompt.strip()
+        if use_random_roles and random.random() < 0.1:
+            prompt = ""
         chat.append({
             "role": "prompt",
             "content": prompt
         })
+
+        if use_random_roles and random.random() < 0.1:
+            chat[0]["content"] = system_template.format(char_name=char_name, content=prompt)
+            chat[1]["content"] = context
 
         for message in messages:
             role = "user" if message["is_human"] else "bot"
@@ -262,7 +273,8 @@ def process_pippa(
 
 def process_gpteacher(
     sample_rate: float = 1.0,
-    dataset_name: str = "AlekseyKorshuk/gpteacher-role-play-chatml"
+    dataset_name: str = "AlekseyKorshuk/gpteacher-role-play-chatml",
+    **kwargs
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split="train")):
@@ -301,7 +313,9 @@ def process_gpteacher(
 def process_limarp(
     sample_rate: float = 1.0,
     dataset_name: str = "TearGosling/limarp_standardized",
-    max_length: int = 20000
+    max_length: int = 20000,
+    system_template: str = DEFAULT_SYSTEM_TEMPLATE,
+    **kwargs
 ):
     current_conversation_id = None
     current_message_id = None
@@ -332,7 +346,7 @@ def process_limarp(
                 role = "prompt"
             current_char_name = message.split("'s")[0]
             if random.random() < 0.5:
-                message = f"You are {current_char_name}. {message}"
+                message = system_template.format(char_name=current_char_name, content=message)
             current_chat.append({
                 "role": role,
                 "content": message
@@ -365,6 +379,14 @@ def main(config_path, output_dir):
     with open(config_path) as r:
         config = json.load(r)
     records = []
+
+    if "system_template" in config:
+        system_template = config["system_template"]
+        for key, value in config.items():
+            if key == "system_template":
+                continue
+            if "system_template" not in value:
+                value["system_template"] = system_template
 
     if "limarp" in config:
         limarp_records = process_limarp(**config["limarp"])
@@ -404,6 +426,8 @@ def main(config_path, output_dir):
         for role in roles:
             assert role in ("bot", "user", "system", "prompt"), role
         if not record["messages"]:
+            continue
+        if has_repetition(record["messages"]):
             continue
         cleaned_records.append(record)
     records = cleaned_records

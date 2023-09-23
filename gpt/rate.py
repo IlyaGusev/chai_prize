@@ -13,6 +13,8 @@ from chai_prize.util.openai import openai_batch_completion, OpenAIDecodingArgume
 def encode_prompt(record, template_path):
     with open(template_path) as f:
         template = Template(f.read())
+    for message in record["messages"]:
+        message["content"] = " ".join(message["content"].split("\n"))
     return template.render(task=record).strip() + "\n"
 
 
@@ -31,6 +33,14 @@ def parse_output(output):
     for score in scores:
         record[score] = int(max(1, record[score]))
     return record
+
+
+def get_first_user_message(record):
+    for message in record["messages"]:
+        if message["role"] == "user":
+            content = message["content"]
+            content = " ".join(content.split()).strip()
+            return content
 
 
 def process_batch(batch, model_name, template_path):
@@ -60,7 +70,7 @@ def process_batch(batch, model_name, template_path):
 
 
 def get_pippa_key(record):
-    return (record["submission_timestamp"], record["bot_id"])
+    return (record["submission_timestamp"], record["bot_id"], get_first_user_message(record))
 
 
 def get_chai_key(record):

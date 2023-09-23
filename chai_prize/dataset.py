@@ -1,3 +1,4 @@
+import random
 from typing import List, Dict
 
 import torch
@@ -17,8 +18,7 @@ class ChatDataset(Dataset):
         templates_path: str,
         only_target_loss: bool = True,
         labels_pad_token_id: int = -100,
-        add_global_eos: bool = True,
-        add_global_linebreak: bool = False
+        add_global_eos: bool = False
     ):
         self.templates_path = templates_path
         self.original_records = original_records
@@ -27,7 +27,6 @@ class ChatDataset(Dataset):
         self.only_target_loss = only_target_loss
         self.labels_pad_token_id = labels_pad_token_id
         self.add_global_eos = add_global_eos
-        self.add_global_linebreak = add_global_linebreak
         self.is_printed = False
 
         self.records = []
@@ -55,42 +54,46 @@ class ChatDataset(Dataset):
         conversation = Conversation.from_template(self.templates_path, char_name=record["char_name"])
         conversation.expand(record["messages"])
 
-        input_ids, labels = [], []
+        bot_messages = []
+        input_ids = []
+        full_text = ""
+        num_messages = len(conversation.messages)
         for message, role in conversation.iter_messages():
             message_input_ids = self.get_tokens(message)
-
-            # Truncate
-            if len(message_input_ids) + len(input_ids) > self.max_tokens_count - 1:
+            if len(message_input_ids) + len(input_ids) > self.max_tokens_count - num_messages:
                 break
-
-            message_labels = message_input_ids
-
-            labels_mask = [self.labels_pad_token_id for _ in range(len(message_input_ids))]
-            labels_mask[:2] = message_input_ids[:2]
-            if role != Conversation.BOT_ROLE and self.only_target_loss:
-                message_labels = labels_mask
-
             input_ids.extend(message_input_ids)
-            labels.extend(message_labels)
+            full_text += message
+            if role == Conversation.BOT_ROLE:
+                bot_messages.append(message)
+
+        input_ids = self.get_tokens(full_text)
+        labels = input_ids[:]
+
+        if self.only_target_loss:
+            labels = [self.labels_pad_token_id for _ in range(len(input_ids))]
+            bot_messages = bot_messages[1:]
+            for message in bot_messages:
+                message_tokens = self.get_tokens("\n" + message)
+                message_tokens = message_tokens[2:]
+                tokens_count = len(message_tokens)
+                for idx in range(len(labels) - tokens_count + 1):
+                    if input_ids[idx: idx + tokens_count] == message_tokens:
+                        labels[idx: idx + tokens_count] = message_tokens
+                        break
+                else:
+                    assert False
 
         if len(set(labels)) <= 2:
             return None
 
-        if input_ids[0] != self.tokenizer.bos_token_id:
+        if input_ids[0] != self.tokenizer.bos_token_id and random.random() < 0.9:
             input_ids.insert(0, self.tokenizer.bos_token_id)
             labels.insert(0, self.labels_pad_token_id)
 
         if self.add_global_eos and input_ids[-1] != self.tokenizer.eos_token_id:
             input_ids.append(self.tokenizer.eos_token_id)
             labels.append(self.tokenizer.eos_token_id)
-
-        linebreak_token_id = self.tokenizer.encode("\n\n\n\n")[-1]
-        if self.add_global_linebreak and input_ids[-1] != linebreak_token_id:
-            input_ids.append(linebreak_token_id)
-            if labels[-1] != self.labels_pad_token_id:
-                labels.append(linebreak_token_id)
-            else:
-                labels.append(self.labels_pad_token_id)
 
         if not self.is_printed:
             print(input_ids)
