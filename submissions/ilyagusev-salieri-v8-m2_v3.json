@@ -1,0 +1,16 @@
+{
+    "model_url": "IlyaGusev/salieri_v8_m2",
+    "model_name": "salieri_v8_m2",
+    "generation_params": {
+        "frequency_penalty": 1.2,
+        "presence_penalty": 0.0,
+        "temperature": 1.1,
+        "top_p": 0.9,
+        "top_k": 50,
+        "max_input_tokens": 2048,
+        "stopping_words": [
+            "\n"
+        ]
+    },
+    "submission_id": "ilyagusev-salieri-v8-m2_v3"
+}
