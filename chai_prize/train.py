@@ -154,7 +154,6 @@ def train(
     only_target_loss = config.get("only_target_loss", True)
     max_tokens_count = config["max_tokens_count"]
     add_global_eos = config.get("add_global_eos", True)
-    add_global_linebreak = config.get("add_global_linebreak", False)
 
     datasets = []
     for records in (train_records, val_records):
@@ -165,7 +164,6 @@ def train(
             templates_path=templates_path,
             only_target_loss=only_target_loss,
             add_global_eos=add_global_eos,
-            add_global_linebreak=add_global_linebreak
         ))
     train_dataset, val_dataset = datasets
     data_collator = DataCollatorForTokenClassification(tokenizer)

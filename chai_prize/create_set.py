@@ -133,6 +133,7 @@ def process_pos(
     min_num_bot_questions: int = 0,
     min_score: int = 0,
     system_template: str = DEFAULT_SYSTEM_TEMPLATE,
+    promote_nsfw: bool = False,
     **kwargs
 ):
     records = []
@@ -169,6 +170,8 @@ def process_pos(
 
         if "role_play_score" in row:
             score = row["role_play_score"] + row["consciousness_score"] + row["user_engagement_score"]
+            if promote_nsfw:
+                score += row["nsfw_score"] // 2
             if score < min_score:
                 continue
 
@@ -341,15 +344,14 @@ def process_limarp(
             assert message_id == current_message_id + 1
         current_message_id = message_id
         if message_type == "instruction":
-            role = "system"
-            if random.random() < 0.2:
-                role = "prompt"
             current_char_name = message.split("'s")[0]
-            if random.random() < 0.5:
-                message = system_template.format(char_name=current_char_name, content=message)
             current_chat.append({
-                "role": role,
+                "role": "system",
                 "content": message
+            })
+            current_chat.append({
+                "role": "prompt",
+                "content": ""
             })
         else:
             content = ":".join(message.split(":")[1:])
@@ -357,7 +359,7 @@ def process_limarp(
             role = "user" if message_type == "input" else "bot"
             current_chat.append({
                 "role": role,
-                "content": content
+                "content": content.strip()
             })
 
     final_records = []
