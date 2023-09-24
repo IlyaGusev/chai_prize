@@ -1,0 +1,15 @@
+{
+    "rpr_en": {
+        "sample_rate": 0.4,
+        "force_gpt4": true
+    },
+    "rpr_ru": {
+        "sample_rate": 0.05,
+        "force_gpt4": true
+    },
+    "pippa": {
+        "sample_rate": 0.5,
+        "min_user_engagement": 60.0,
+        "max_length": 20000
+    }
+}
