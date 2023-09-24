@@ -9,8 +9,11 @@ from chai_guanaco.metrics import get_submission_metrics
 def deploy(
     model_list: str,
     retry_threshold: float = 0.15,
-    retry_measure_feedback_count: int = 30,
-    starting_min_feedback_count: int = 150
+    retry_measure_feedback_count: int = 50,
+    starting_min_feedback_count: int = 150,
+    interval: int = 60,
+    current_submission_id: str = None,
+    current_chosen_model: str = None
 ):
     model_list = model_list.split(",")
     min_feedback_counts = {}
@@ -19,16 +22,29 @@ def deploy(
     final_metrics = dict()
 
     while True:
-        chosen_model = random.choice(model_list)
-        submission_id = submit(chosen_model)
+        if current_submission_id is None:
+            chosen_model = random.choice(model_list)
+            submission_id = submit(chosen_model)
+        else:
+            assert current_chosen_model
+            submission_id = current_submission_id
+            chosen_model = current_chosen_model
+            current_submission_id = None
+            current_chosen_model = None
+
         while True:
             print("Submission ID:", submission_id)
             metrics = get_submission_metrics(submission_id)
+
             print("Metrics:", metrics)
+            total_feedback_count = metrics.get("total_feedback_count", 0)
+            if total_feedback_count == 0:
+                time.sleep(interval)
+                continue
+
             retry_score = metrics["retry_score"]
             thumbs_up_ratio = metrics["thumbs_up_ratio"]
             user_engagement = metrics["user_engagement"]
-            total_feedback_count = metrics["total_feedback_count"]
 
             # Early stopping because of retries
             if total_feedback_count > retry_measure_feedback_count and retry_score > retry_threshold:
@@ -36,6 +52,7 @@ def deploy(
                 print(f"Retry score: {retry_score}")
                 print(f"Feedback count: {total_feedback_count}")
                 chai.deactivate_model(submission_id)
+                time.sleep(interval)
                 break
 
             # Early stopping because of bad metrics
@@ -49,6 +66,7 @@ def deploy(
                     print("Stopping because of bad metrics!")
                     print("Past metrics:", str(past_metrics))
                     print(f"Feedback count: {total_feedback_count}")
+                    time.sleep(interval)
                     break
 
             # Normal finish
@@ -57,11 +75,12 @@ def deploy(
                 final_metrics[chosen_model] = metrics
                 print("Normal finish! Wow! Check your leaderboard")
                 chai.deactivate_model(submission_id)
+                time.sleep(interval)
                 break
 
             print()
             print("Sleeping 60 seconds")
-            time.sleep(60)
+            time.sleep(interval)
 
 
 if __name__ == "__main__":
