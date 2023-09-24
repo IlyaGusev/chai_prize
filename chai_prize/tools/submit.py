@@ -32,6 +32,7 @@ def submit(model_url):
             "generation_params": generation_params,
             "submission_id": submission_id
         }, w, indent=4, ensure_ascii=False)
+    return submission_id
 
 
 if __name__ == "__main__":
