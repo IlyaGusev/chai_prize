@@ -1,0 +1,16 @@
+{
+    "model_url": "IlyaGusev/rolecuna_d9_m3",
+    "model_name": "rolecuna_d9_m3",
+    "generation_params": {
+        "frequency_penalty": 0.4,
+        "presence_penalty": 0.0,
+        "temperature": 1.0,
+        "top_p": 0.9,
+        "top_k": 50,
+        "max_input_tokens": 2048,
+        "stopping_words": [
+            "\n"
+        ]
+    },
+    "submission_id": "ilyagusev-rolecuna-d9-m3_v5"
+}

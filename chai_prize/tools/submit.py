@@ -1,19 +1,22 @@
 import json
 import fire
+from datetime import datetime
 import chai_guanaco as chai
 from chai_prize.formatter import CustomFormatterV3
 
 
-def submit(model_url):
+def submit(model_url, **kwargs):
     generation_params = {
-        "frequency_penalty": 0.5,
+        "frequency_penalty": 0.45,
         "presence_penalty": 0.0,
         "temperature": 1.0,
-        "top_p": 0.9,
-        "top_k": 50,
+        "top_p": 0.85,
+        "top_k": 30,
         "max_input_tokens": 2048,
         "stopping_words": ['\n']
     }
+    for key, value in kwargs.items():
+        generation_params[key] = value
 
     model_name = model_url.split("/")[-1]
     submission_parameters = {
@@ -30,7 +33,8 @@ def submit(model_url):
             "model_url": model_url,
             "model_name": model_name,
             "generation_params": generation_params,
-            "submission_id": submission_id
+            "submission_id": submission_id,
+            "timestamp": int(datetime.now().timestamp())
         }, w, indent=4, ensure_ascii=False)
     return submission_id
 

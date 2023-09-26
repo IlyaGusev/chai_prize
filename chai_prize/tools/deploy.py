@@ -8,9 +8,9 @@ from chai_guanaco.metrics import get_submission_metrics
 
 def deploy(
     model_list: str,
-    retry_threshold: float = 0.15,
-    retry_measure_feedback_count: int = 50,
-    starting_min_feedback_count: int = 150,
+    retry_threshold: float = 0.16,
+    retry_measure_feedback_count: int = 90,
+    starting_min_feedback_count: int = 120,
     interval: int = 60,
     current_submission_id: str = None,
     current_chosen_model: str = None
