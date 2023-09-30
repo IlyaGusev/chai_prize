@@ -3,7 +3,7 @@
         "evaluation_strategy": "steps",
         "per_device_train_batch_size": 2,
         "per_device_eval_batch_size": 1,
-        "gradient_accumulation_steps": 64,
+        "gradient_accumulation_steps": 32,
         "eval_steps": 5,
         "save_steps": 5,
         "logging_steps": 1,
@@ -17,7 +17,7 @@
         "optim": "adamw_torch"
     },
     "lora": {
-        "r": 4,
+        "r": 8,
         "lora_alpha": 16,
         "lora_dropout": 0.05,
         "bias": "none",
@@ -29,7 +29,7 @@
     "mode": "chat",
     "add_global_eos": false,
     "templates_path": "prompts/prompt_v3.json",
-    "model_name": "models/vicuna-13b-v1.5",
+    "model_name": "models/pygmalion-2-13b",
     "model_type": "causal",
     "max_tokens_count": 2560
 }

@@ -1,0 +1,23 @@
+{
+    "pippa": {
+        "sample_rate": 1.0,
+        "min_user_engagement": 0.0,
+        "min_num_bot_questions": 0,
+        "max_length": 20000,
+        "dataset_name": "IlyaGusev/pippa_scored",
+        "min_score": 25,
+        "min_user_engagement_score": 8,
+        "min_role_play_score": 8,
+        "use_random_roles": true,
+        "promote_nsfw": true
+    },
+    "pos": {
+        "sample_rate": 1.0,
+        "min_user_engagement": 0.0,
+        "min_num_bot_questions": 0,
+        "max_length": 20000,
+        "min_score": 24,
+        "dataset_name": "IlyaGusev/chai_scored"
+    },
+    "system_template": "{char_name}'s Persona: {content}"
+}

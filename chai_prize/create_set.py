@@ -64,16 +64,15 @@ def has_repetition(chat):
     return len(uniq_bot_messages) < len(bot_messages)
 
 
-def process_rpr_row(row, system_template):
+def process_rpr_row(row):
     name = row["name"]
     greeting = row["greeting"]
     context = row["context"]
     example_dialogue = row["example_dialogue"]
 
-    system_message = system_template.format(char_name=name, content=context)
     chat = [{
         "role": "system",
-        "content": system_message
+        "content": context
     }]
 
     mapping = {
@@ -112,12 +111,11 @@ def process_rpr(
     sample_rate: float = 1.0,
     force_gpt4: bool = True,
     dataset_name: str = "IlyaGusev/gpt_roleplay_realm",
-    system_template: str = DEFAULT_SYSTEM_TEMPLATE,
     **kwargs
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split=split)):
-        for record in process_rpr_row(row, system_template):
+        for record in process_rpr_row(row):
             if force_gpt4 and record["creator"] == "gpt-4":
                 records.append(record)
             elif random.random() < sample_rate:
@@ -132,7 +130,8 @@ def process_pos(
     max_length: int = 6000,
     min_num_bot_questions: int = 0,
     min_score: int = 0,
-    system_template: str = DEFAULT_SYSTEM_TEMPLATE,
+    min_user_engagement_score: int = 0,
+    min_role_play_score: int = 0,
     promote_nsfw: bool = False,
     **kwargs
 ):
@@ -153,10 +152,10 @@ def process_pos(
         if chat[0]["role"] != "system":
             chat.insert(0, {
                 "role": "system",
-                "content": system_template.format(char_name=char_name, content="")
+                "content": ""
             })
         else:
-            chat[0]["content"] = system_template.format(char_name=char_name, content="")
+            chat[0]["content"] = ""
 
         if chat[1]["role"] == "prompt" and chat[2]["role"] == "user":
             chat[1]["role"] = "bot"
@@ -173,6 +172,10 @@ def process_pos(
             if promote_nsfw:
                 score += row["nsfw_score"] // 2
             if score < min_score:
+                continue
+            if row["user_engagement_score"] < min_user_engagement_score:
+                continue
+            if row["role_play_score"] < min_role_play_score:
                 continue
 
         if has_repetition(chat):
@@ -197,7 +200,9 @@ def process_pippa(
     dataset_name: str = "PygmalionAI/PIPPA",
     min_num_bot_questions: int = 0,
     min_score: int = 0,
-    system_template: str = DEFAULT_SYSTEM_TEMPLATE,
+    promote_nsfw: bool = False,
+    min_user_engagement_score: int = 0,
+    min_role_play_score: int = 0,
     use_random_roles: bool = False,
     **kwargs
 ):
@@ -208,8 +213,7 @@ def process_pippa(
         context = row["bot_description"]
         char_name = row["bot_name"]
         messages = revert_flattening(row["conversation"])
-        system_message = system_template.format(char_name=char_name, content=context)
-        chat = [{"role": "system", "content": system_message}]
+        chat = [{"role": "system", "content": context}]
 
         prompt = row["bot_definitions"]
         prompt = prompt.split("END_OF_DIALOG")[0]
@@ -228,7 +232,7 @@ def process_pippa(
         })
 
         if use_random_roles and random.random() < 0.1:
-            chat[0]["content"] = system_template.format(char_name=char_name, content=prompt)
+            chat[0]["content"] = prompt
             chat[1]["content"] = context
 
         for message in messages:
@@ -257,7 +261,13 @@ def process_pippa(
 
         if "role_play_score" in row:
             score = row["role_play_score"] + row["consciousness_score"] + row["user_engagement_score"]
+            if promote_nsfw:
+                score += row["nsfw_score"] // 2
             if score < min_score:
+                continue
+            if row["user_engagement_score"] < min_user_engagement_score:
+                continue
+            if row["role_play_score"] < min_role_play_score:
                 continue
 
         records.append({
@@ -287,21 +297,15 @@ def process_gpteacher(
         for message in row["conversation"]:
             content = message["content"]
             role = message["role"]
-            if role == "User":
-                chat.append({
-                    "role": "user",
-                    "content": content
-                })
-            else:
-                chat.append({
-                    "role": "bot",
-                    "content": content
-                })
-        random_number = random.random()
-        if random_number < 0.3:
-            chat[0]["role"] = "system"
-        elif random_number < 0.2:
-            chat[0]["role"] = "prompt"
+            chat.append({
+                "role": "user" if role == "User" else "bot",
+                "content": content
+            })
+        chat[0]["role"] = "system"
+        chat.insert(1, {
+            "role": "prompt",
+            "content": ""
+        })
         records.append({
             "messages": chat,
             "char_name": "bot",
@@ -317,7 +321,6 @@ def process_limarp(
     sample_rate: float = 1.0,
     dataset_name: str = "TearGosling/limarp_standardized",
     max_length: int = 20000,
-    system_template: str = DEFAULT_SYSTEM_TEMPLATE,
     **kwargs
 ):
     current_conversation_id = None
@@ -359,7 +362,7 @@ def process_limarp(
             role = "user" if message_type == "input" else "bot"
             current_chat.append({
                 "role": role,
-                "content": content.strip()
+                "content": " ".join(content.strip().split())
             })
 
     final_records = []
@@ -376,24 +379,104 @@ def process_limarp(
     return records
 
 
+def process_bluemoon(
+    sample_rate: float = 1.0,
+    dataset_name: str = "seank0602/bluemoon_fandom_rp",
+    max_length: int = 20000,
+    **kwargs
+):
+    records = []
+    for row in load_dataset(dataset_name, split="train"):
+        conversation_id = row["id"]
+        chat = row["conversations"]
+        for message in chat:
+            role = message.pop("from")
+            message["role"] = "user" if role == "human" else "bot"
+            message["content"] = message.pop("value")
+        system_messages = [{
+            "role": "system",
+            "content": ""
+        }, {
+            "role": "prompt",
+            "content": ""
+        }]
+        chat = system_messages + chat
+        chat = shrink(chat, max_length)
+        if not has_bot_message(chat):
+            continue
+        records.append({
+            "messages": chat,
+            "char_name": "Character",
+            "source": "bluemoon"
+        })
+    print("Bluemoon count:", len(records))
+    if records:
+        print("Bluemoon max length:", calc_max_length(records))
+    return records
+
+
+def process_ao3(
+    sample_rate: float = 1.0,
+    dataset_name: str = "ebony59/AO3_fandom_chai",
+    max_length: int = 20000,
+    **kwargs
+):
+    records = []
+    for row in load_dataset(dataset_name, split="train"):
+        conversations = row["conversations"]
+        chat = [{
+            "role": "system",
+            "content": row["personalities"]
+        }, {
+            "role": "prompt",
+            "content": row["prompt"]
+        }]
+        char1 = row["character_1"]
+        char2 = row["character_2"]
+        characters = {message["role"] for message in conversations}
+        if len(characters) > 2 or char1 not in characters or char2 not in characters:
+            continue
+        for message in conversations:
+            chat.append({
+                "role": "user" if message["role"] == char2 else "bot",
+                "content": message["content"].strip()
+            })
+        chat = shrink(chat, max_length)
+        if not has_bot_message(chat):
+            continue
+        records.append({
+            "messages": chat,
+            "char_name": char1,
+            "source": "ao3"
+        })
+    print("AO3 count:", len(records))
+    if records:
+        print("AO3 max length:", calc_max_length(records))
+    return records
+
+
 def main(config_path, output_dir):
     random.seed(42)
     with open(config_path) as r:
         config = json.load(r)
     records = []
 
-    if "system_template" in config:
-        system_template = config["system_template"]
-        for key, value in config.items():
-            if key == "system_template":
-                continue
-            if "system_template" not in value:
-                value["system_template"] = system_template
+    # AO3
+    if "ao3" in config:
+        ao3_records = process_ao3(**config["ao3"])
+        records += ao3_records
 
+    # Bluemoon
+    if "bluemoon" in config:
+        bluemoon_records = process_bluemoon(**config["bluemoon"])
+        records += bluemoon_records
+
+    # LIMA RP
     if "limarp" in config:
         limarp_records = process_limarp(**config["limarp"])
         records += limarp_records
 
+    # PIPPA
     if "pippa" in config:
         pippa_records = process_pippa(**config["pippa"])
         records += pippa_records

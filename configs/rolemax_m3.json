@@ -3,7 +3,7 @@
         "evaluation_strategy": "steps",
         "per_device_train_batch_size": 2,
         "per_device_eval_batch_size": 1,
-        "gradient_accumulation_steps": 32,
+        "gradient_accumulation_steps": 64,
         "eval_steps": 5,
         "save_steps": 5,
         "logging_steps": 1,
