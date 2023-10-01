@@ -1,0 +1,17 @@
+{
+    "model_url": "IlyaGusev/salieri_d10_m6",
+    "model_name": "salieri_d10_m6",
+    "generation_params": {
+        "frequency_penalty": 0.45,
+        "presence_penalty": 0.0,
+        "temperature": 1.0,
+        "top_p": 0.9,
+        "top_k": 40,
+        "max_input_tokens": 2048,
+        "stopping_words": [
+            "\n"
+        ]
+    },
+    "submission_id": "ilyagusev-salieri-d10-m6_v2",
+    "timestamp": 1695840853
+}

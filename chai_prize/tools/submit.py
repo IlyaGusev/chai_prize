@@ -18,6 +18,7 @@ def submit(model_url, **kwargs):
     for key, value in kwargs.items():
         generation_params[key] = value
 
+    print(generation_params)
     model_name = model_url.split("/")[-1]
     submission_parameters = {
         "model_repo": model_url,
@@ -36,7 +37,7 @@ def submit(model_url, **kwargs):
             "submission_id": submission_id,
             "timestamp": int(datetime.now().timestamp())
         }, w, indent=4, ensure_ascii=False)
-    return submission_id
+    return submission_id, submission_parameters
 
 
 if __name__ == "__main__":

@@ -7,8 +7,11 @@ from chai_guanaco.metrics import get_submission_metrics
 
 
 @auto_authenticate
-def get_my_submissions(developer_key, submission_ids):
-    submission_ids = submission_ids.split(",")
+def fetch_my_submissions(developer_key, submission_ids = None):
+    if submission_ids is not None:
+        submission_ids = submission_ids.split(",")
+    else:
+        submission_ids = [k for k, v in chai.get_my_submissions().items() if v == "deployed"]
     leaderboard = []
     for submission_id in tqdm(submission_ids):
         metrics = get_submission_metrics(submission_id, developer_key)
@@ -16,8 +19,8 @@ def get_my_submissions(developer_key, submission_ids):
     return pd.DataFrame(leaderboard)
 
 
-def main(submission_ids: str):
-    df = get_my_submissions(submission_ids=submission_ids)
+def main(submission_ids: str = None):
+    df = fetch_my_submissions(submission_ids=submission_ids)
     pd.set_option('display.max_columns', 100)
     df = df.drop(["thumbs_up_ratio_se", "user_engagement_se"], axis=1)
     print(df)

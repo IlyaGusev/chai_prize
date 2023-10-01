@@ -1,0 +1,17 @@
+{
+    "model_url": "IlyaGusev/salieri_d13_m4",
+    "model_name": "salieri_d13_m4",
+    "generation_params": {
+        "frequency_penalty": 0.45,
+        "presence_penalty": 0.0,
+        "temperature": 1.0,
+        "top_p": 0.9,
+        "top_k": 40,
+        "max_input_tokens": 2048,
+        "stopping_words": [
+            "\n"
+        ]
+    },
+    "submission_id": "ilyagusev-salieri-d13-m4_v2",
+    "timestamp": 1695852789
+}
