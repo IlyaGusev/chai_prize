@@ -19,7 +19,7 @@
     "lora": {
         "r": 4,
         "lora_alpha": 16,
-        "lora_dropout": 0.05,
+        "lora_dropout": 0.2,
         "bias": "none",
         "target_modules": ["q_proj", "v_proj", "k_proj", "o_proj", "up_proj", "down_proj", "gate_proj"],
         "task_type": "CAUSAL_LM"
@@ -29,7 +29,7 @@
     "mode": "chat",
     "add_global_eos": false,
     "templates_path": "prompts/prompt_v3.json",
-    "model_name": "models/vicuna-13b-v1.5",
+    "model_name": "models/top1",
     "model_type": "causal",
     "max_tokens_count": 2560
 }

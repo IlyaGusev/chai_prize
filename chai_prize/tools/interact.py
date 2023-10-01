@@ -31,7 +31,7 @@ def interact(model_name, template_path):
             eos_token_id=13
         )[0]
         conversation.add_bot_message(output)
-        print("Bot:", output)
+        print(f"{char_name}:", output)
 
 
 if __name__ == "__main__":

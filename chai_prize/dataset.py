@@ -72,7 +72,6 @@ class ChatDataset(Dataset):
 
         if self.only_target_loss:
             labels = [self.labels_pad_token_id for _ in range(len(input_ids))]
-            bot_messages = bot_messages[1:]
             for message in bot_messages:
                 message_tokens = self.get_tokens("\n" + message)
                 message_tokens = message_tokens[2:]
@@ -87,7 +86,7 @@ class ChatDataset(Dataset):
         if len(set(labels)) <= 2:
             return None
 
-        if input_ids[0] != self.tokenizer.bos_token_id and random.random() < 0.9:
+        if input_ids[0] != self.tokenizer.bos_token_id and random.random() < 0.8:
             input_ids.insert(0, self.tokenizer.bos_token_id)
             labels.insert(0, self.labels_pad_token_id)
 

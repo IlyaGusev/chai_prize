@@ -1,0 +1,32 @@
+{
+    "pippa": {
+        "sample_rate": 1.0,
+        "min_user_engagement": 0.0,
+        "min_num_bot_questions": 0,
+        "max_length": 20000,
+        "min_score": 0,
+        "use_random_roles": true
+    },
+    "pos": {
+        "sample_rate": 1.0,
+        "min_user_engagement": 0.0,
+        "min_num_bot_questions": 0,
+        "max_length": 20000,
+        "min_score": 0
+    },
+    "rpr_en": {
+        "sample_rate": 1.0,
+        "force_gpt4": true
+    },
+    "rpr_ru": {
+        "sample_rate": 1.0,
+        "force_gpt4": true
+    },
+    "limarp": {
+        "sample_rate": 1.0
+    },
+    "gpteacher": {
+        "sample_rate": 1.0
+    },
+    "system_template": "{char_name}'s Persona: {content}"
+}

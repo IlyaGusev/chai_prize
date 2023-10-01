@@ -3,14 +3,14 @@
         "evaluation_strategy": "steps",
         "per_device_train_batch_size": 2,
         "per_device_eval_batch_size": 1,
-        "gradient_accumulation_steps": 64,
-        "eval_steps": 5,
-        "save_steps": 5,
+        "gradient_accumulation_steps": 32,
+        "eval_steps": 6,
+        "save_steps": 6,
         "logging_steps": 1,
         "learning_rate": 0.0003,
         "num_train_epochs": 3,
         "lr_scheduler_type": "cosine",
-        "warmup_steps": 5,
+        "warmup_steps": 6,
         "fp16": false,
         "bf16": true,
         "torch_compile": false,
@@ -19,7 +19,7 @@
     "lora": {
         "r": 4,
         "lora_alpha": 16,
-        "lora_dropout": 0.05,
+        "lora_dropout": 0.1,
         "bias": "none",
         "target_modules": ["q_proj", "v_proj", "k_proj", "o_proj", "up_proj", "down_proj", "gate_proj"],
         "task_type": "CAUSAL_LM"
@@ -29,7 +29,7 @@
     "mode": "chat",
     "add_global_eos": false,
     "templates_path": "prompts/prompt_v3.json",
-    "model_name": "models/vicuna-13b-v1.5",
+    "model_name": "models/birdcat",
     "model_type": "causal",
     "max_tokens_count": 2560
 }
