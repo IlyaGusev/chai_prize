@@ -7,7 +7,7 @@
         "eval_steps": 5,
         "save_steps": 5,
         "logging_steps": 1,
-        "learning_rate": 0.0003,
+        "learning_rate": 0.0002,
         "num_train_epochs": 3,
         "lr_scheduler_type": "cosine",
         "warmup_steps": 5,
