@@ -1,5 +1,7 @@
 import os
 import json
+import copy
+from collections import Counter
 import random
 from pathlib import Path
 from statistics import median
@@ -7,9 +9,6 @@ from statistics import median
 import fire
 from datasets import load_dataset
 from tqdm import tqdm
-
-
-DEFAULT_SYSTEM_TEMPLATE = "{char_name}'s Persona: {content}"
 
 
 def revert_flattening(records):
@@ -64,7 +63,55 @@ def has_repetition(chat):
     return len(uniq_bot_messages) < len(bot_messages)
 
 
-def process_rpr_row(row):
+def bot_has_long_answers(chat, min_chars: int = 150):
+    bot_messages = [m["content"] for m in chat if m["role"] == "bot"]
+    if len(bot_messages) > 1:
+        bot_messages = bot_messages[1:]
+    result = min([len(m) for m in bot_messages])
+    return result > min_chars
+
+
+def bot_has_actions(chat, min_fraction: float = 0.85):
+    bot_messages = [m["content"] for m in chat if m["role"] == "bot"]
+    actions_count = sum([int("*" in m or '"' in m) for m in bot_messages])
+    return actions_count >= int(len(bot_messages) * min_fraction)
+
+
+def bot_has_questions(chat, min_fraction: float = 0.6):
+    bot_messages = [m["content"] for m in chat if m["role"] == "bot"]
+    num_questions = calc_bot_questions(chat)
+    return num_questions >= int(len(bot_messages) * min_fraction)
+
+
+def add_ctrl_attributes(chat, row):
+    counts = Counter()
+    attributes = []
+    context = chat[0]["content"]
+    if bot_has_long_answers(chat):
+        counts["verbose"] += 1
+        attributes.append("Verbosity: high")
+    else:
+        attributes.append("Verbosity: low")
+    if bot_has_actions(chat):
+        counts["actions"] += 1
+        attributes.append("Actions: many")
+    else:
+        attributes.append("Actions: few")
+
+    role_play_score = row.get("role_play_score")
+    if role_play_score is not None:
+        attributes.append(f"Role play: {role_play_score}")
+
+    consciousness_score = row.get("consciousness_score")
+    if consciousness_score is not None:
+        attributes.append(f"Consciousness: {consciousness_score}")
+
+    context += "\n#### Controls:\n" + "\n".join(attributes) + "\n"
+    chat[0]["content"] = context
+    return counts
+
+
+def process_rpr_row(row, add_ctrl: bool = False):
     name = row["name"]
     greeting = row["greeting"]
     context = row["context"]
@@ -91,17 +138,19 @@ def process_rpr_row(row):
     })
 
     for dialogue in row["dialogues"]:
-        chat += dialogue["chat"]
-        for message in chat:
+        current_chat = copy.deepcopy(chat)
+        current_chat += dialogue["chat"]
+        for message in current_chat:
             if message["role"] == "char":
                 message["role"] = "bot"
             if message["role"] == "operator":
                 message["role"] = "user"
-
+        if add_ctrl:
+            add_ctrl_attributes(current_chat, row)
         yield {
-            "messages": chat,
+            "messages": current_chat,
             "creator": dialogue["model_name"],
-            "char_name": row["name"],
+            "char_name": row["name"].strip(),
             "source": "rpr"
         }
 
@@ -111,11 +160,12 @@ def process_rpr(
     sample_rate: float = 1.0,
     force_gpt4: bool = True,
     dataset_name: str = "IlyaGusev/gpt_roleplay_realm",
+    add_ctrl: bool = False,
     **kwargs
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split=split)):
-        for record in process_rpr_row(row):
+        for record in process_rpr_row(row, add_ctrl=add_ctrl):
             if force_gpt4 and record["creator"] == "gpt-4":
                 records.append(record)
             elif random.random() < sample_rate:
@@ -126,16 +176,18 @@ def process_rpr(
 def process_pos(
     sample_rate: float = 1.0,
     dataset_name: str = "IlyaGusev/chai_prize_positive_conversations",
-    min_user_engagement: float = 50.0,
-    max_length: int = 6000,
+    min_user_engagement: float = 0.0,
+    max_length: int = 20000,
     min_num_bot_questions: int = 0,
     min_score: int = 0,
     min_user_engagement_score: int = 0,
     min_role_play_score: int = 0,
     promote_nsfw: bool = False,
+    add_ctrl: bool = False,
     **kwargs
 ):
     records = []
+    ctrl_counts = Counter()
     for row in tqdm(load_dataset(dataset_name, split="train")):
         if random.random() > sample_rate:
             continue
@@ -148,7 +200,7 @@ def process_pos(
         if num_bot_questions < min_num_bot_questions:
             continue
 
-        char_name = row["char_name"]
+        char_name = row["char_name"].strip()
         if chat[0]["role"] != "system":
             chat.insert(0, {
                 "role": "system",
@@ -170,7 +222,7 @@ def process_pos(
         if "role_play_score" in row:
             score = row["role_play_score"] + row["consciousness_score"] + row["user_engagement_score"]
             if promote_nsfw:
-                score += row["nsfw_score"] // 2
+                score += row["nsfw_score"]
             if score < min_score:
                 continue
             if row["user_engagement_score"] < min_user_engagement_score:
@@ -181,12 +233,18 @@ def process_pos(
         if has_repetition(chat):
             continue
 
+        if add_ctrl:
+            row_counts = add_ctrl_attributes(chat, row)
+            ctrl_counts += row_counts
+
         records.append({
             "messages": chat,
             "char_name": char_name,
             "conversation_id": row["conversation_id"],
             "source": "pos_feedback"
         })
+    if ctrl_counts:
+        print("CTRL:", ctrl_counts)
     print("From positive feedback count:", len(records))
     if records:
         print("Pos max length:", calc_max_length(records))
@@ -196,7 +254,7 @@ def process_pos(
 def process_pippa(
     sample_rate: float = 1.0,
     max_length: int = 20000,
-    min_user_engagement: float = 50.0,
+    min_user_engagement: float = 0.0,
     dataset_name: str = "PygmalionAI/PIPPA",
     min_num_bot_questions: int = 0,
     min_score: int = 0,
@@ -204,16 +262,21 @@ def process_pippa(
     min_user_engagement_score: int = 0,
     min_role_play_score: int = 0,
     use_random_roles: bool = False,
+    add_ctrl: bool = False,
+    min_messages: int = 4
     **kwargs
 ):
     records = []
+
+    nsfw_count = 0
+    ctrl_counts = Counter()
     for row in tqdm(load_dataset(dataset_name, split="train")):
         if random.random() > sample_rate:
             continue
         context = row["bot_description"]
-        char_name = row["bot_name"]
+        char_name = row["bot_name"].strip()
         messages = revert_flattening(row["conversation"])
-        if len(messages) <= 3:
+        if len(messages) < min_messages:
             continue
 
         chat = [{"role": "system", "content": context}]
@@ -233,10 +296,6 @@ def process_pippa(
             "role": "prompt",
             "content": prompt
         })
-
-        if use_random_roles and random.random() < 0.1:
-            chat[0]["content"] = prompt
-            chat[1]["content"] = context
 
         for message in messages:
             role = "user" if message["is_human"] else "bot"
@@ -264,16 +323,28 @@ def process_pippa(
         if not has_bot_message(chat):
             continue
 
+        if use_random_roles and random.random() < 0.1:
+            chat[0]["content"], chat[1]["content"] = chat[1]["content"], chat[0]["content"]
+
+        if add_ctrl:
+            row_counts = add_ctrl_attributes(chat, row)
+            ctrl_counts += row_counts
+
         if "role_play_score" in row:
             score = row["role_play_score"] + row["consciousness_score"] + row["user_engagement_score"]
+            is_nsfw = False
             if promote_nsfw:
-                score += row["nsfw_score"] // 2
+                score += row["nsfw_score"]
+                if row["nsfw_score"] > 7:
+                    is_nsfw = True
             if score < min_score:
                 continue
             if row["user_engagement_score"] < min_user_engagement_score:
                 continue
             if row["role_play_score"] < min_role_play_score:
                 continue
+            if is_nsfw:
+                nsfw_count += 1
 
         records.append({
             "messages": chat,
@@ -283,7 +354,10 @@ def process_pippa(
             "categories": row["categories"],
             "source": "pippa"
         })
+    if ctrl_counts:
+        print("CTRL:", ctrl_counts)
     print("PIPPA count:", len(records))
+    print("PIPPA NSWF count:", nsfw_count)
     if records:
         print("PIPPA max length:", calc_max_length(records))
     return records
@@ -326,6 +400,7 @@ def process_limarp(
     sample_rate: float = 1.0,
     dataset_name: str = "TearGosling/limarp_standardized",
     max_length: int = 20000,
+    add_ctrl: bool = False,
     **kwargs
 ):
     current_conversation_id = None
@@ -341,9 +416,11 @@ def process_limarp(
         if current_conversation_id != conversation_id:
             if current_chat:
                 current_chat = shrink(current_chat, max_length)
+                if add_ctrl:
+                    add_ctrl_attributes(current_chat, row)
                 records.append({
                     "messages": current_chat,
-                    "char_name": current_char_name,
+                    "char_name": current_char_name.strip(),
                     "source": "limarp"
                 })
             current_chat = []

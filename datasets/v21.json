@@ -1,0 +1,27 @@
+{
+    "pippa": {
+        "sample_rate": 1.0,
+        "max_length": 20000,
+        "dataset_name": "IlyaGusev/pippa_scored",
+        "use_random_roles": true,
+        "add_ctrl": true,
+        "min_score": 24,
+        "min_role_play_score": 3,
+        "dataset_name": "IlyaGusev/pippa_scored",
+        "use_random_roles": true,
+        "promote_nsfw": true
+    },
+    "pos": {
+        "sample_rate": 1.0,
+        "max_length": 20000,
+        "dataset_name": "IlyaGusev/chai_scored",
+        "add_ctrl": true
+    },
+    "rpr_ru": {
+        "sample_rate": 0.0,
+        "force_gpt4": true
+    },
+    "limarp": {
+        "sample_rate": 0.5
+    }
+}

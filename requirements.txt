@@ -4,12 +4,11 @@ chai_guanaco
 numpy >= 1.12.1
 scipy >= 1.0.1
 torch >= 2.0.0
-accelerate == 0.21.0
-bitsandbytes == 0.40.2
+accelerate == 0.23.0
+bitsandbytes == 0.41.0
 peft == 0.5.0
-git+https://github.com/huggingface/transformers.git@5936c8c
-flash-attn == 2.2.4.post1
-otptimum == 1.13.1
+transformers == 4.34.0
+flash-attn == 2.3.0
 zstandard
 jsonlines
 wandb

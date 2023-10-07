@@ -7,12 +7,12 @@ from chai_prize.util.generate import generate
 
 def interact(model_name, template_path):
     model, tokenizer, generation_config = load_saiga(model_name)
-    char_name = input("Character name: ")
+    char_name = "Makise Kurisu"
     conversation = Conversation.from_template(template_path, char_name=char_name)
-    system_message = input("System: ")
+    system_message = "You are a genius human girl from Steins;Gate universe"
     conversation.add_system_message(system_message)
-    conversation.add_prompt_message("")
-    conversation.add_bot_message("Hi!")
+    conversation.add_prompt_message(f"")
+    conversation.add_bot_message("Hi there! I'm Makisu, nice to meet you! *winks*")
     while True:
         user_message = input("User: ")
         if user_message.strip() == "/reset":
