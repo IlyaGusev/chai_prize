@@ -1,5 +1,6 @@
 import os
 import json
+import copy
 import shutil
 
 import fire
@@ -10,12 +11,22 @@ from chai_prize.util.io import read_jsonl, write_jsonl
 from chai_prize.util.openai import openai_batch_completion, OpenAIDecodingArguments
 
 
-def encode_prompt(record, template_path):
+def encode_prompt(record, template_path, exclude_system: bool = False):
     with open(template_path) as f:
         template = Template(f.read())
-    for message in record["messages"]:
+    fixed_record = copy.deepcopy(record)
+    filtered_messages = []
+    for message in fixed_record["messages"]:
+        if exclude_system and message["role"] in ("system", "prompt"):
+            continue
+        if message["role"] == "user":
+            message["role"] = "User"
+        elif message["role"] == "bot":
+            message["role"] = record["char_name"]
         message["content"] = " ".join(message["content"].split("\n"))
-    return template.render(task=record).strip() + "\n"
+        filtered_messages.append(message)
+    fixed_record["messages"] = filtered_messages
+    return template.render(task=fixed_record).strip() + "\n"
 
 
 def parse_output(output):
@@ -24,14 +35,6 @@ def parse_output(output):
     text = output[start_index:end_index+1]
     text = text.strip()
     record = json.loads(text)
-    scores = ["user_engagement_score", "role_play_score", "nsfw_score", "inappropriate_score", "consciousness_score"]
-    expected_keys = ["explanation"] + scores
-    for key in record:
-        assert key in expected_keys
-    for key in expected_keys:
-        assert key in record
-    for score in scores:
-        record[score] = int(max(1, record[score]))
     return record
 
 
@@ -43,13 +46,16 @@ def get_first_user_message(record):
             return content
 
 
-def process_batch(batch, model_name, template_path):
-    prompts = [[{"role": "user", "content": encode_prompt(r, template_path)}] for r in batch]
+def process_batch(batch, model_name, template_path, output_key, exclude_system):
+    prompts = [
+        [{"role": "user", "content": encode_prompt(r, template_path, exclude_system)}]
+        for r in batch
+    ]
     results = openai_batch_completion(
         batch=prompts,
         model_name=model_name,
         decoding_args=OpenAIDecodingArguments(
-            max_tokens=1024
+            max_tokens=1536
         )
     )
     output_records = []
@@ -62,7 +68,7 @@ def process_batch(batch, model_name, template_path):
         print()
         r["output"] = result
         try:
-            r["parsed_output"] = parse_output(result)
+            r[output_key] = parse_output(result)
         except Exception:
             print(f"Failed to parse: {result}")
         output_records.append(r)
@@ -78,12 +84,14 @@ def get_chai_key(record):
 
 
 def main(
-    input_path,
-    output_path,
-    template_path,
-    model_name="gpt-4",
-    request_batch_size=2,
-    dataset_name="pippa"
+    input_path: str,
+    output_path: str,
+    template_path: str,
+    model_name: str = "gpt-4",
+    request_batch_size: int = 2,
+    dataset_name: str = "pippa",
+    output_key: str = "traits",
+    exclude_system: bool = False
 ):
     existing_keys = set()
     output_records = list()
@@ -107,13 +115,25 @@ def main(
         if len(batch) != request_batch_size:
             continue
 
-        output_records += process_batch(batch, model_name, template_path)
+        output_records += process_batch(
+            batch,
+            model_name,
+            template_path,
+            output_key=output_key,
+            exclude_system=exclude_system
+        )
         write_jsonl(output_records, output_path + "_tmp")
         shutil.move(output_path + "_tmp", output_path)
         batch = []
 
     if batch:
-        output_records += process_batch(batch, model_name, template_path)
+        output_records += process_batch(
+            batch,
+            model_name,
+            template_path,
+            output_key=output_key,
+            exclude_system=exclude_system
+        )
         write_jsonl(output_records, output_path + "_tmp")
         shutil.move(output_path + "_tmp", output_path)
 

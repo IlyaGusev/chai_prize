@@ -1,0 +1,17 @@
+{
+    "model_url": "IlyaGusev/salieri_d23_m8",
+    "model_name": "salieri_d23_m8",
+    "generation_params": {
+        "frequency_penalty": 0.49473887285610874,
+        "presence_penalty": 0.0,
+        "temperature": 1.0615591900196988,
+        "top_p": 0.9554391871546574,
+        "top_k": 37,
+        "max_input_tokens": 2048,
+        "stopping_words": [
+            "\n"
+        ]
+    },
+    "submission_id": "ilyagusev-salieri-d23-m8_v2",
+    "timestamp": 1696549161
+}

@@ -1,0 +1,17 @@
+{
+    "model_url": "IlyaGusev/rolecuna_d21_m3",
+    "model_name": "rolecuna_d21_m3",
+    "generation_params": {
+        "frequency_penalty": 0.6782945864834761,
+        "presence_penalty": 0.0,
+        "temperature": 0.9907368533685074,
+        "top_p": 0.855700417183077,
+        "top_k": 34,
+        "max_input_tokens": 2048,
+        "stopping_words": [
+            "\n"
+        ]
+    },
+    "submission_id": "ilyagusev-rolecuna-d21-m3_v2",
+    "timestamp": 1696465536
+}

@@ -1,0 +1,17 @@
+{
+    "model_url": "IlyaGusev/mythyras_d19_m1",
+    "model_name": "mythyras_d19_m1",
+    "generation_params": {
+        "frequency_penalty": 0.3608282916586897,
+        "presence_penalty": 0.0,
+        "temperature": 0.9651021489301213,
+        "top_p": 0.7518415785831586,
+        "top_k": 20,
+        "max_input_tokens": 2048,
+        "stopping_words": [
+            "\n"
+        ]
+    },
+    "submission_id": "ilyagusev-mythyras-d19-m1_v12",
+    "timestamp": 1696297985
+}

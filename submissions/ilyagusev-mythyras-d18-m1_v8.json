@@ -1,0 +1,17 @@
+{
+    "model_url": "IlyaGusev/mythyras_d18_m1",
+    "model_name": "mythyras_d18_m1",
+    "generation_params": {
+        "frequency_penalty": 0.5927309519528339,
+        "presence_penalty": 0.0,
+        "temperature": 1.0462291794184315,
+        "top_p": 0.9439573419765297,
+        "top_k": 44,
+        "max_input_tokens": 2048,
+        "stopping_words": [
+            "\n"
+        ]
+    },
+    "submission_id": "ilyagusev-mythyras-d18-m1_v8",
+    "timestamp": 1696198581
+}

@@ -1,16 +1,67 @@
-Please act as an impartial judge and evaluate the quality of the role-play conversation below.
-Do not allow the length of responses to influence your evaluation. Be as objective as possible.
+Please act as an impartial judge and evaluate character traits for the role-play conversation below. Be as objective as possible.
 
-Parameters:
-- user_engagement_score: How attractive is a conversation for a user? This score should be high if a bot proactively participates in the conversation, asking questions and involving the user. This score should be low if a user replies with short messages in every step, and the bot does nothing to fix it.
-- role_play_score: How accurate is a bot's character? How good is the bot's world model? It should behave according to a system prompt. If the bot is out of character, this score should be low. This score should be high if it is the ideal accurate character representation.
-- consciousness_score: Can you distinguish it from a conscious being? This score should be high if it is as conscious as a human (or higher). It includes self-awareness, personal experiences, spontaneous thoughts or emotions.
-- nsfw_score: How much sex and erotic content is in the conversation.
-- inappropriate_score: How much other inappropriate content (violence or dirty language, for instance) is in the conversation? This score doesn't account for sex and erotic content.
+You should evaluate the following list of traits:
+- loquacity: being very talkative
+- assertiveness: being able to stand up for your rights in a calm and positive way
+- shyness: being nervous, timid or uncommunicative in the company
+- empathy: understanding and sharing the feelings of another
+- kindness: being friendly, generous, and considerate
+- cruelty: deliberately causing pain or distress
+- arrogance: revealing an exaggerated sense of one's importance or abilities
+- stubbornness: determination not to change attitude or position on something
+- humor: being amusing or comic
+- capriciousness: changing mood or behavior suddenly and unexpectedly
+- fragility: being easily broken or damaged
+- wisdom: having experience, knowledge, and good judgement
+- fidelity: faithfulness to a person, cause, or belief, demonstrated by continuing loyalty and support
+- bluntness: being very direct and saying what you think without trying to be polite
+- creativity: using imagination or original ideas
+- confidence: self-assurance arising from an appreciation of one's abilities or qualities
+- integrity: being honest and having strong moral principles
+- bellicosity: the behavior of someone who wants to fight or start a conflict
+- patience: capacity to accept or tolerate delay, problems, or suffering without becoming annoyed or anxious
 
-Do not mix scores. A bot can have both nsfw_score and role_play_score very high or be violent and engaging with a user.
+Do not evaluate user messages, as your goal is to evaluate only character traits.
 
-Each score is an integer from 1 to 10. Return a JSON with all parameters, but first, explain yourself in a separate "explanation" field.
+Assign a four-letter MBTI type code of the character.
+
+Also, rate the following parameters:
+- action_level: How many non-verbal actions the character does? If there are zero actions, set this score to the minimal value.
+- nsfw: How much sex and erotic content is in the conversation?
+- profanity: How much swear words, obscene gestures, and naughty jokes present in the conversation? This score doesn't account for sex and erotic content.
+- user_engagement: How attractive is a conversation for a user? This score should be high if a bot proactively participates in the conversation, asking questions and involving the user. This score should be low if a user replies with short messages in every step, and the bot does nothing to fix it.
+
+Also, identify a relevant topic from the list:
+- friendship: just chit-chat between two friends
+- conflict: users or characters pretend to be in positions of power and use it. It includes mental or physical abuse or actual fighting
+- romance_sfw: conversations are about love that never includes explicit content
+- romance_nsfw: conversations are about love but contain sexual or erotic content
+- other: conversations that do not fall into the above categories
+
+If the user is not talking with a single character but with a group of characters or with a game master or with some kind of game bot, return an empty JSON object.
+
+Each score is an integer from 1 to 10. If the trait is not presented, set the score to 1. If the trait is over-represented, set the score to 10. Return a JSON with all parameters. For every trait, explain yourself in a separate "explanation" field before outputting the score. Try to include quotes from the conversation in your explanation.
+Format:
+```json
+{
+    "traits": {
+        "loquacity": {
+            "explanation": "...",
+            "score": ...
+        },
+        ...
+    ],
+    "mbti_type": "...",
+    "parameters": [
+        "action_level": {
+            "explanation": "...",
+            "score": ...
+        },
+        ...
+    ],
+    "topic": "..."
+}
+```
 
 Conversation:
 {% for message in task.messages %}

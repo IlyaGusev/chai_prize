@@ -1,0 +1,17 @@
+{
+    "model_url": "IlyaGusev/cinyras_d18_m1",
+    "model_name": "cinyras_d18_m1",
+    "generation_params": {
+        "frequency_penalty": 0.5949445781545007,
+        "presence_penalty": 0.0,
+        "temperature": 0.9623369104700028,
+        "top_p": 0.9238698229156058,
+        "top_k": 45,
+        "max_input_tokens": 2048,
+        "stopping_words": [
+            "\n"
+        ]
+    },
+    "submission_id": "ilyagusev-cinyras-d18-m1_v10",
+    "timestamp": 1696208720
+}

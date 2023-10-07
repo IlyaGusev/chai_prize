@@ -29,15 +29,7 @@ def submit(model_url, **kwargs):
 
     submitter = chai.ModelSubmitter()
     submission_id = submitter.submit(submission_parameters)
-    with open(f"submissions/{submission_id}.json", "w") as w:
-        json.dump({
-            "model_url": model_url,
-            "model_name": model_name,
-            "generation_params": generation_params,
-            "submission_id": submission_id,
-            "timestamp": int(datetime.now().timestamp())
-        }, w, indent=4, ensure_ascii=False)
-    return submission_id, submission_parameters
+    return submission_id.strip(), submission_parameters
 
 
 if __name__ == "__main__":

@@ -11,19 +11,23 @@ from chai_guanaco.metrics import get_submission_metrics
 
 def deploy(
     model_list: str,
-    retry_threshold: float = 0.17,
-    retry_early_threshold: float = 0.25,
+    retry_threshold: float = 0.18,
     engagement_threshold: int = 120,
-    engagement_early_threshold: int = 50,
     thumbs_up_threshold: int = 0.65,
-    thumbs_up_early_threshold: int = 0.5,
-    early_reject_feedback_count: int = 50,
     reject_feedback_count: int = 100,
     accept_feedback_count: int = 140,
     interval: int = 30,
     current_submission_id: str = None,
     current_chosen_model: str = None,
-    current_wandb_id: str = None
+    current_wandb_id: str = None,
+    min_top_p: float = 0.8,
+    max_top_p: float = 1.0,
+    min_top_k: int = 35,
+    max_top_k: int = 50,
+    min_temperature: float = 0.9,
+    max_temperature: float = 1.1,
+    min_frequency_penalty: float = 0.3,
+    max_frequency_penalty: float = 0.5,
 ):
     model_list = model_list.split(",")
     min_feedback_counts = {}
@@ -34,10 +38,10 @@ def deploy(
     while True:
         if current_submission_id is None:
             chosen_model = random.choice(model_list)
-            top_p = 0.85 + random.random() * 0.1
-            top_k = 40 + random.randint(0, 20)
-            temperature = 0.95 + random.random() * 0.1
-            frequency_penalty = 0.5 + random.random() * 0.1
+            top_p = random.uniform(min_top_p, max_top_p)
+            top_k = random.randint(min_top_k, max_top_k)
+            temperature = random.uniform(min_temperature, max_temperature)
+            frequency_penalty = random.uniform(min_frequency_penalty, max_frequency_penalty)
             submission_id, params = submit(
                 chosen_model,
                 top_p=top_p,
@@ -71,19 +75,6 @@ def deploy(
             thumbs_up_ratio = metrics["thumbs_up_ratio"]
             user_engagement = metrics["user_engagement"]
 
-            # Very early stopping
-            is_bad_retry = retry_score > retry_early_threshold
-            is_bad_engagement = user_engagement < engagement_early_threshold
-            is_bad_thumbs_up = thumbs_up_ratio < thumbs_up_early_threshold
-            is_bad = is_bad_retry or is_bad_engagement or is_bad_thumbs_up
-            if total_feedback_count > early_reject_feedback_count and is_bad:
-                print("Stopping because of bad metrics!")
-                print(f"Feedback count: {total_feedback_count}")
-                chai.deactivate_model(submission_id)
-                time.sleep(interval)
-                wandb.finish()
-                break
-
             # Early stopping
             is_bad_retry = retry_score > retry_threshold
             is_bad_engagement = user_engagement < engagement_threshold
@@ -97,7 +88,7 @@ def deploy(
                 wandb.finish()
                 break
 
-            # Early stopping because of bad metrics
+            # Early stopping because of bad metrics compared to prev model
             if chosen_model in final_metrics and total_feedback_count > min_feedback_counts[chosen_model] - 20:
                 past_metrics = final_metrics[chosen_model]
                 past_thumbs_up_ratio = past_metrics["thumbs_up_ratio"]
@@ -125,6 +116,7 @@ def deploy(
             print()
             print(f"Sleeping {interval} seconds")
             time.sleep(interval)
+        break
 
 
 if __name__ == "__main__":

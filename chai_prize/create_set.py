@@ -213,6 +213,9 @@ def process_pippa(
         context = row["bot_description"]
         char_name = row["bot_name"]
         messages = revert_flattening(row["conversation"])
+        if len(messages) <= 3:
+            continue
+
         chat = [{"role": "system", "content": context}]
 
         prompt = row["bot_definitions"]
@@ -239,6 +242,8 @@ def process_pippa(
             role = "user" if message["is_human"] else "bot"
             content = message["message"]
             content = content if role == "user" else clean_bot_message(content)
+            if content.startswith(char_name + ":"):
+                content = content[len(char_name) + 1:].strip()
             chat.append({
                 "role": role,
                 "content": content,
