@@ -83,6 +83,10 @@ def bot_has_questions(chat, min_fraction: float = 0.6):
     return num_questions >= int(len(bot_messages) * min_fraction)
 
 
+def has_empty_messages(chat):
+    return sum([len(m["content"]) == 0 for m in chat]) >= 1
+
+
 def add_ctrl_attributes(chat, row):
     counts = Counter()
     attributes = []
@@ -216,14 +220,11 @@ def parse_chai_conversation(text):
 def process_chai(
     sample_rate: float = 1.0,
     dataset_name: str = "ChaiML/20231007_chai_prize_model_feedback_all",
-    min_user_engagement: float = 0.0,
+    min_user_engagement: float = 10.0,
     max_length: int = 20000,
     min_num_bot_questions: int = 0,
-    min_score: int = 0,
-    min_user_engagement_score: int = 0,
-    min_role_play_score: int = 0,
-    promote_nsfw: bool = False,
     add_ctrl: bool = False,
+    min_messages: int = 6,
     **kwargs
 ):
     records = []
@@ -243,54 +244,28 @@ def process_chai(
         chat = parse_chai_conversation(text)
         if not chat:
             continue
+
         if not has_bot_message(chat):
             continue
+
         if has_repetition(chat):
+            continue
+
+        if has_empty_messages(chat):
+            continue
+
+        if calc_user_engagement(chat) < min_user_engagement:
+            continue
+
+        if calc_bot_questions(chat) < min_num_bot_questions:
+            continue
+
+        if len(chat) < min_messages:
             continue
 
         if random.random() > sample_rate:
             continue
 
-        engagement = calc_user_engagement(chat)
-        if engagement < min_user_engagement:
-            continue
-        num_bot_questions = calc_bot_questions(chat)
-        if num_bot_questions < min_num_bot_questions:
-            continue
-
-<<<<<<< Updated upstream
-        char_name = row["char_name"].strip()
-        if chat[0]["role"] != "system":
-            chat.insert(0, {
-                "role": "system",
-                "content": ""
-            })
-        else:
-            chat[0]["content"] = ""
-
-        if chat[1]["role"] == "prompt" and chat[2]["role"] == "user":
-            chat[1]["role"] = "bot"
-            chat.insert(1, {
-                "role": "prompt",
-                "content": ""
-            })
-        chat = shrink(chat, max_length)
-        if not has_bot_message(chat):
-            continue
-
-        if "role_play_score" in row:
-            score = row["role_play_score"] + row["consciousness_score"] + row["user_engagement_score"]
-            if promote_nsfw:
-                score += row["nsfw_score"]
-            if score < min_score:
-                continue
-            if row["user_engagement_score"] < min_user_engagement_score:
-                continue
-            if row["role_play_score"] < min_role_play_score:
-                continue
-
-        if has_repetition(chat):
-            continue
         system_chat = [{"role": "system", "content": ""}, {"role": "prompt", "content": ""}]
         chat = system_chat + chat
         chat = shrink(chat, max_length)
@@ -305,11 +280,12 @@ def process_chai(
             "conversation_id": row["conversation_id"],
             "source": "chai"
         })
+
     if ctrl_counts:
         print("CTRL:", ctrl_counts)
     print("From Chai count:", len(records))
     if records:
-        print("Pos max length:", calc_max_length(records))
+        print("Chai max length:", calc_max_length(records))
     return records
 
 
@@ -325,7 +301,7 @@ def process_pippa(
     min_role_play_score: int = 0,
     use_random_roles: bool = False,
     add_ctrl: bool = False,
-    min_messages: int = 4
+    min_messages: int = 4,
     **kwargs
 ):
     records = []
