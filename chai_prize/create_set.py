@@ -173,9 +173,49 @@ def process_rpr(
     return records
 
 
-def process_pos(
+def parse_chai_conversation(text):
+    char_name = text.split(":")[0]
+    current_role = "user"
+    current_text = text
+    user_name = "Anonymous user"
+
+    def parse_message(message, current_role):
+        if message.count(":") != 1:
+            return None
+        role, content = message.split(":")
+        if current_role == "bot":
+            assert role.strip() == char_name.strip(), role
+        else:
+            assert role.strip() == user_name.strip(), role
+        return {
+            "role": current_role,
+            "content": content.strip()
+        }
+
+    chat = []
+    while True:
+        str_to_find = user_name + ":" if current_role == "user" else char_name + ":"
+        message_end_pos = current_text.find(str_to_find)
+        current_role = "user" if current_role == "bot" else "bot"
+        if message_end_pos == -1:
+            message = current_text
+            parsed_message = parse_message(message, current_role)
+            if parsed_message is None:
+                return None
+            chat.append(parsed_message)
+            return chat
+        message = current_text[:message_end_pos]
+        parsed_message = parse_message(message, current_role)
+        if parsed_message is None:
+            return None
+        chat.append(parsed_message)
+        current_text = current_text[message_end_pos:]
+    return chat
+
+
+def process_chai(
     sample_rate: float = 1.0,
-    dataset_name: str = "IlyaGusev/chai_prize_positive_conversations",
+    dataset_name: str = "ChaiML/20231007_chai_prize_model_feedback_all",
     min_user_engagement: float = 0.0,
     max_length: int = 20000,
     min_num_bot_questions: int = 0,
@@ -189,9 +229,27 @@ def process_pos(
     records = []
     ctrl_counts = Counter()
     for row in tqdm(load_dataset(dataset_name, split="train")):
+        conversation_id = row["conversation_id"]
+
+        text = row["conversation"]
+        if "(deleted)" in text or "INST" in text:
+            continue
+
+        thumbs_up = row["thumbs_up"]
+        if not thumbs_up:
+            continue
+
+        char_name = text.split(":")[0]
+        chat = parse_chai_conversation(text)
+        if not chat:
+            continue
+        if not has_bot_message(chat):
+            continue
+        if has_repetition(chat):
+            continue
+
         if random.random() > sample_rate:
             continue
-        chat = revert_flattening(row["messages"])
 
         engagement = calc_user_engagement(chat)
         if engagement < min_user_engagement:
@@ -200,6 +258,7 @@ def process_pos(
         if num_bot_questions < min_num_bot_questions:
             continue
 
+<<<<<<< Updated upstream
         char_name = row["char_name"].strip()
         if chat[0]["role"] != "system":
             chat.insert(0, {
@@ -232,6 +291,9 @@ def process_pos(
 
         if has_repetition(chat):
             continue
+        system_chat = [{"role": "system", "content": ""}, {"role": "prompt", "content": ""}]
+        chat = system_chat + chat
+        chat = shrink(chat, max_length)
 
         if add_ctrl:
             row_counts = add_ctrl_attributes(chat, row)
@@ -241,11 +303,11 @@ def process_pos(
             "messages": chat,
             "char_name": char_name,
             "conversation_id": row["conversation_id"],
-            "source": "pos_feedback"
+            "source": "chai"
         })
     if ctrl_counts:
         print("CTRL:", ctrl_counts)
-    print("From positive feedback count:", len(records))
+    print("From Chai count:", len(records))
     if records:
         print("Pos max length:", calc_max_length(records))
     return records
@@ -575,10 +637,10 @@ def main(config_path, output_dir):
             print("RPR max length:", calc_max_length(rp_records))
         records += rp_records
 
-    # Positive conversations
-    if "pos" in config:
-        pos_records = process_pos(**config["pos"])
-        records += pos_records
+    # Chai conversations
+    if "chai" in config or "pos" in config:
+        chai_records = process_chai(**config.get("chai", config.get("pos")))
+        records += chai_records
 
     # GPTeacher
     if "gpteacher" in config:

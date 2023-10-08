@@ -38,7 +38,7 @@ Also, identify a relevant topic from the list:
 - romance_nsfw: conversations are about love but contain sexual or erotic content
 - other: conversations that do not fall into the above categories
 
-If the user is not talking with a single character but with a group of characters or with a game master or with some kind of game bot, return an empty JSON object.
+If the user is not talking with a single character but with a group of characters or with a game master or with some kind of game bot, return empty "traits" and "mbti_type".
 
 Each score is an integer from 1 to 10. If the trait is not presented, set the score to 1. If the trait is over-represented, set the score to 10. Return a JSON with all parameters. For every trait, explain yourself in a separate "explanation" field before outputting the score. Try to include quotes from the conversation in your explanation.
 Format:

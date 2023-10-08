@@ -1,4 +1,5 @@
 import fire
+from itertools import chain
 from tqdm import tqdm
 from datasets import load_dataset
 
@@ -26,11 +27,12 @@ def get_pippa_key(record):
 
 def merge_pippa_output(input_path, original_path, output_path):
     rated_records = read_jsonl(input_path)
-    rated_records = [r for r in rated_records if "parsed_output" in r]
+    rated_records = [r for r in rated_records if "traits" in r]
     rated_records = {get_pippa_key(r): r for r in rated_records}
     print(len(rated_records))
 
     merged_records = []
+    all_keys = set()
     for row in tqdm(read_jsonl(original_path)):
         bot_id = row["bot_id"]
         submission_timestamp = int(row["submission_timestamp"]) // 1000
@@ -43,10 +45,20 @@ def merge_pippa_output(input_path, original_path, output_path):
         if key not in rated_records:
             continue
 
-        scores = rated_records[key]["parsed_output"]
-        for key, value in scores.items():
-            row[key] = value
-        row["scores_explanation"] = row.pop("explanation")
+        new_record = rated_records[key]
+        scores = new_record.pop("traits", {})
+        if not scores:
+            assert all_keys
+            for key in all_keys:
+                row[key] = None
+        else:
+            for key, value in chain(scores["traits"].items(), scores["parameters"].items()):
+                row[key + "_score"] = value.get("score", value.get("slice"))
+                all_keys.add(key + "_score")
+                row[key + "_explanation"] = value["explanation"]
+                all_keys.add(key + "_explanation")
+            row["mbti_type"] = scores["mbti_type"]
+            all_keys.add("mbti_type")
         merged_records.append(row)
     print(len(merged_records))
     write_jsonl(merged_records, output_path)
