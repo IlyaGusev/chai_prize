@@ -80,7 +80,7 @@ def get_pippa_key(record):
 
 
 def get_chai_key(record):
-    return (record["conversation_id"], )
+    return (record["original_fields"]["conversation_id"], )
 
 
 def main(
@@ -90,7 +90,7 @@ def main(
     model_name: str = "gpt-4",
     request_batch_size: int = 2,
     dataset_name: str = "pippa",
-    output_key: str = "traits",
+    output_key: str = "parsed_output",
     exclude_system: bool = False
 ):
     existing_keys = set()

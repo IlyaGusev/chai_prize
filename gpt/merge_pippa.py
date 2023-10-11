@@ -59,6 +59,8 @@ def merge_pippa_output(input_path, original_path, output_path):
                 all_keys.add(key + "_explanation")
             row["mbti_type"] = scores["mbti_type"]
             all_keys.add("mbti_type")
+            row["topic"] = scores["topic"]
+            all_keys.add("topic")
         merged_records.append(row)
     print(len(merged_records))
     write_jsonl(merged_records, output_path)

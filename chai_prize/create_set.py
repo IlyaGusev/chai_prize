@@ -220,32 +220,42 @@ def parse_chai_conversation(text):
 def process_chai(
     sample_rate: float = 1.0,
     dataset_name: str = "ChaiML/20231007_chai_prize_model_feedback_all",
+    character_dataset_name: str = "ChaiML/seasonIII_chatAI_configurations",
     min_user_engagement: float = 10.0,
     max_length: int = 20000,
     min_num_bot_questions: int = 0,
     add_ctrl: bool = False,
     min_messages: int = 6,
+    only_thumbs_up: bool = True,
     **kwargs
 ):
     records = []
     ctrl_counts = Counter()
+    characters = {row["bot_id"]: row for row in load_dataset(character_dataset_name, split="train")}
     for row in tqdm(load_dataset(dataset_name, split="train")):
         conversation_id = row["conversation_id"]
+        bot_id = row["bot_id"]
+
+        if bot_id not in characters:
+            continue
 
         text = row["conversation"]
         if "(deleted)" in text or "INST" in text:
             continue
 
         thumbs_up = row["thumbs_up"]
-        if not thumbs_up:
+        if only_thumbs_up and not thumbs_up:
             continue
 
-        char_name = text.split(":")[0]
+        char_name = text.split(":")[0].strip()
         chat = parse_chai_conversation(text)
         if not chat:
             continue
 
         if not has_bot_message(chat):
+            continue
+
+        if sum(["START" in m["content"] for m in chat]) > 0:
             continue
 
         if has_repetition(chat):
@@ -266,7 +276,17 @@ def process_chai(
         if random.random() > sample_rate:
             continue
 
-        system_chat = [{"role": "system", "content": ""}, {"role": "prompt", "content": ""}]
+        character = characters[bot_id]
+
+        memory = character["memory"]
+        memory = memory if memory else ""
+        memory = memory.strip()
+
+        prompt = character["prompt"]
+        prompt = prompt if prompt else ""
+        prompt = prompt.strip()
+
+        system_chat = [{"role": "system", "content": memory}, {"role": "prompt", "content": prompt}]
         chat = system_chat + chat
         chat = shrink(chat, max_length)
 
@@ -277,7 +297,7 @@ def process_chai(
         records.append({
             "messages": chat,
             "char_name": char_name,
-            "conversation_id": row["conversation_id"],
+            "original_fields": row,
             "source": "chai"
         })
 
@@ -390,6 +410,7 @@ def process_pippa(
             "bot_id": row["bot_id"],
             "submission_timestamp": int(row["submission_timestamp"].timestamp()),
             "categories": row["categories"],
+            "original_fields": row,
             "source": "pippa"
         })
     if ctrl_counts:
