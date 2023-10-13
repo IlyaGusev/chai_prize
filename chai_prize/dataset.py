@@ -60,7 +60,7 @@ class ChatDataset(Dataset):
         num_messages = len(conversation.messages)
         for message, role in conversation.iter_messages():
             message_input_ids = self.get_tokens(message)
-            if len(message_input_ids) + len(input_ids) > self.max_tokens_count - num_messages:
+            if len(message_input_ids) + len(input_ids) > self.max_tokens_count - num_messages * 2:
                 break
             input_ids.extend(message_input_ids)
             full_text += message
@@ -86,7 +86,7 @@ class ChatDataset(Dataset):
         if len(set(labels)) <= 2:
             return None
 
-        if input_ids[0] != self.tokenizer.bos_token_id and random.random() < 0.8:
+        if input_ids[0] != self.tokenizer.bos_token_id and random.random() < 0.7:
             input_ids.insert(0, self.tokenizer.bos_token_id)
             labels.insert(0, self.labels_pad_token_id)
 

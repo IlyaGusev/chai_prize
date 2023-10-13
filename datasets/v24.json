@@ -1,0 +1,17 @@
+{
+    "pippa": {
+        "sample_rate": 1.0,
+        "max_length": 20000,
+        "dataset_name": "IlyaGusev/pippa_scored",
+        "use_random_roles": true,
+        "min_action_level": 7,
+        "min_user_engagement": 5
+    },
+    "pos": {
+        "sample_rate": 1.0,
+        "max_length": 20000,
+        "dataset_name": "IlyaGusev/chai_scored",
+        "min_action_level": 7,
+        "min_user_engagement": 5
+    }
+}

@@ -87,6 +87,81 @@ def has_empty_messages(chat):
     return sum([len(m["content"]) == 0 for m in chat]) >= 1
 
 
+def has_bad_ss(chat):
+    ss = (
+        " AI",
+        "language model",
+        "Chai"
+    )
+    for message in chat:
+        content = message["content"]
+        for s in ss:
+            if s in content:
+                return True
+    return False
+
+def is_whitelisted_model(model_name):
+    models = (
+        "ilyagusev",
+        "khoantap",
+        "anhnv125",
+        "tokenbender",
+        "tehvenom",
+        "khanhnto",
+        "liquac09",
+        "monkeydddd",
+        "alkahestry",
+        "the-face-of-goonery",
+        "jnewber",
+        "chargoddard",
+        "ansoi"
+    )
+    for model in models:
+        if model in model_name:
+            return True
+    return False
+
+
+def is_good_feedback(feedback):
+    words = (
+        "wow",
+        "cool",
+        "like",
+        "nice",
+        "very",
+        "fun",
+        "love",
+        "great",
+        "fine",
+        "excellent",
+        "sex",
+        "accurate",
+        "pretty",
+        "aight",
+        "alright",
+        "interesting",
+        "better"
+        "goof",
+        "comforing",
+        "comforting",
+        "ok",
+        "okay",
+        "amazing",
+        "damn"
+    )
+    for word in words:
+        if word in feedback.lower():
+            return True
+    return len(feedback.split()) >= 4
+
+
+def fix_bot_answers(chat):
+    for message in chat:
+        if message["role"] == "bot":
+            message["content"] = " ".join(message["content"].split())
+    return chat
+
+
 def add_ctrl_attributes(chat, row):
     counts = Counter()
     attributes = []
@@ -170,9 +245,9 @@ def process_rpr(
     records = []
     for row in tqdm(load_dataset(dataset_name, split=split)):
         for record in process_rpr_row(row, add_ctrl=add_ctrl):
-            if force_gpt4 and record["creator"] == "gpt-4":
-                records.append(record)
-            elif random.random() < sample_rate:
+            if force_gpt4 and record["creator"] != "gpt-4":
+                continue
+            if random.random() < sample_rate:
                 records.append(record)
     return records
 
@@ -196,6 +271,13 @@ def parse_chai_conversation(text):
             "content": content.strip()
         }
 
+    filtered_lines = [line for line in text.split("\n") if "(deleted)" not in line]
+    #has_deleted = False
+    #if len(filtered_lines) != len(text.split("\n")):
+    #    has_deleted = True
+    text = "\n".join(filtered_lines)
+    current_text = text
+
     chat = []
     while True:
         str_to_find = user_name + ":" if current_role == "user" else char_name + ":"
@@ -207,6 +289,8 @@ def parse_chai_conversation(text):
             if parsed_message is None:
                 return None
             chat.append(parsed_message)
+            #if has_deleted:
+            #    print(chat)
             return chat
         message = current_text[:message_end_pos]
         parsed_message = parse_message(message, current_role)
@@ -217,17 +301,28 @@ def parse_chai_conversation(text):
     return chat
 
 
+def get_score(row, field):
+    score  = row.get(field + "_score", 0)
+    score = score if score else 0
+    return score
+
+
 def process_chai(
     sample_rate: float = 1.0,
     dataset_name: str = "ChaiML/20231007_chai_prize_model_feedback_all",
     character_dataset_name: str = "ChaiML/seasonIII_chatAI_configurations",
-    min_user_engagement: float = 10.0,
     max_length: int = 20000,
     min_num_bot_questions: int = 0,
     add_ctrl: bool = False,
-    min_messages: int = 6,
-    only_thumbs_up: bool = True,
-    **kwargs
+    min_messages: int = 4,
+    only_thumbs_up: bool = False,
+    only_good_feedback: bool = False,
+    min_action_level: int = 0,
+    min_user_engagement: int = 0,
+    min_creativity: int = 0,
+    min_action_heuristics_score: float = 0.0,
+    min_user_engagement_heuristics_score: float = 0.0,
+    only_whitelist: bool = False
 ):
     records = []
     ctrl_counts = Counter()
@@ -239,12 +334,12 @@ def process_chai(
         if bot_id not in characters:
             continue
 
-        text = row["conversation"]
-        if "(deleted)" in text or "INST" in text:
-            continue
-
         thumbs_up = row["thumbs_up"]
         if only_thumbs_up and not thumbs_up:
+            continue
+
+        text = row["conversation"]
+        if "INST" in text:
             continue
 
         char_name = text.split(":")[0].strip()
@@ -264,13 +359,34 @@ def process_chai(
         if has_empty_messages(chat):
             continue
 
-        if calc_user_engagement(chat) < min_user_engagement:
+        if has_bad_ss(chat):
+            continue
+
+        if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
             continue
 
         if calc_bot_questions(chat) < min_num_bot_questions:
             continue
 
         if len(chat) < min_messages:
+            continue
+
+        if not bot_has_actions(chat, min_action_heuristics_score):
+            continue
+
+        if only_whitelist and not is_whitelisted_model(row["model_name"]):
+            continue
+
+        if only_good_feedback and not is_good_feedback(row["feedback"]):
+            continue
+
+        if get_score(row, "action_level") < min_action_level:
+            continue
+
+        if get_score(row, "user_engagement") < min_user_engagement:
+            continue
+
+        if get_score(row, "creativity") < min_creativity:
             continue
 
         if random.random() > sample_rate:
@@ -289,6 +405,13 @@ def process_chai(
         system_chat = [{"role": "system", "content": memory}, {"role": "prompt", "content": prompt}]
         chat = system_chat + chat
         chat = shrink(chat, max_length)
+        chat = fix_bot_answers(chat)
+
+        current_role = None
+        for message in chat:
+            assert message["role"] != current_role, chat
+            current_role = message["role"]
+
 
         if add_ctrl:
             row_counts = add_ctrl_attributes(chat, row)
@@ -312,25 +435,21 @@ def process_chai(
 def process_pippa(
     sample_rate: float = 1.0,
     max_length: int = 20000,
-    min_user_engagement: float = 0.0,
     dataset_name: str = "PygmalionAI/PIPPA",
     min_num_bot_questions: int = 0,
-    min_score: int = 0,
-    promote_nsfw: bool = False,
-    min_user_engagement_score: int = 0,
-    min_role_play_score: int = 0,
     use_random_roles: bool = False,
     add_ctrl: bool = False,
     min_messages: int = 4,
-    **kwargs
+    min_action_level: int = 0,
+    min_user_engagement: int = 0,
+    min_creativity: int = 0,
+    min_action_heuristics_score: float = 0.0,
+    min_user_engagement_heuristics_score: float = 0.0
 ):
     records = []
 
-    nsfw_count = 0
     ctrl_counts = Counter()
     for row in tqdm(load_dataset(dataset_name, split="train")):
-        if random.random() > sample_rate:
-            continue
         context = row["bot_description"]
         char_name = row["bot_name"].strip()
         messages = revert_flattening(row["conversation"])
@@ -369,12 +488,10 @@ def process_pippa(
         if sum(["{{user}}" in message["message"] for message in messages[1:]]) > 0:
             continue
 
-        engagement = calc_user_engagement(chat)
-        if engagement < min_user_engagement:
+        if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
             continue
 
-        num_bot_questions = calc_bot_questions(chat)
-        if num_bot_questions < min_num_bot_questions:
+        if calc_bot_questions(chat) < min_num_bot_questions:
             continue
 
         chat = shrink(chat, max_length)
@@ -384,25 +501,29 @@ def process_pippa(
         if use_random_roles and random.random() < 0.1:
             chat[0]["content"], chat[1]["content"] = chat[1]["content"], chat[0]["content"]
 
+        if not bot_has_actions(chat, min_action_heuristics_score):
+            continue
+
+        if has_bad_ss(chat):
+            continue
+
+        if get_score(row, "action_level") < min_action_level:
+            continue
+
+        if get_score(row, "user_engagement") < min_user_engagement:
+            continue
+
+        if get_score(row, "creativity") < min_creativity:
+            continue
+
+        if random.random() > sample_rate:
+            continue
+
+        chat = fix_bot_answers(chat)
+
         if add_ctrl:
             row_counts = add_ctrl_attributes(chat, row)
             ctrl_counts += row_counts
-
-        if "role_play_score" in row:
-            score = row["role_play_score"] + row["consciousness_score"] + row["user_engagement_score"]
-            is_nsfw = False
-            if promote_nsfw:
-                score += row["nsfw_score"]
-                if row["nsfw_score"] > 7:
-                    is_nsfw = True
-            if score < min_score:
-                continue
-            if row["user_engagement_score"] < min_user_engagement_score:
-                continue
-            if row["role_play_score"] < min_role_play_score:
-                continue
-            if is_nsfw:
-                nsfw_count += 1
 
         records.append({
             "messages": chat,
@@ -416,7 +537,6 @@ def process_pippa(
     if ctrl_counts:
         print("CTRL:", ctrl_counts)
     print("PIPPA count:", len(records))
-    print("PIPPA NSWF count:", nsfw_count)
     if records:
         print("PIPPA max length:", calc_max_length(records))
     return records
@@ -646,7 +766,7 @@ def main(config_path, output_dir):
 
     # Final processing
     cleaned_records = []
-    for record in records:
+    for record in tqdm(records):
         messages = record["messages"]
         roles = {m["role"] for m in messages}
         for role in roles:
@@ -659,11 +779,17 @@ def main(config_path, output_dir):
     records = cleaned_records
     print("All count after cleaning:", len(records))
 
+    for record in records:
+        if "original_fields" not in record:
+            continue
+        record["original_fields"].pop("submission_timestamp", None)
+
     random.shuffle(records)
     border = int(0.95 * len(records))
     train_records = records[:border]
     val_records = records[border:]
     Path(output_dir).mkdir(parents=True, exist_ok=True)
+
     with open(os.path.join(output_dir, "train.jsonl"), "w") as w:
         for record in train_records:
             w.write(json.dumps(record, ensure_ascii=False).strip() + "\n")
