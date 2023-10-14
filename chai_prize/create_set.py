@@ -10,19 +10,17 @@ import fire
 from datasets import load_dataset
 from tqdm import tqdm
 
-
-def revert_flattening(records):
-    fixed_records = []
-    for key, values in records.items():
-        if not fixed_records:
-            fixed_records = [{} for _ in range(len(values))]
-        for i, value in enumerate(values):
-            fixed_records[i][key] = value
-    return fixed_records
-
-
-def calc_max_length(records):
-    return max([sum([len(m["content"]) for m in r["messages"]]) for r in records])
+from chai_prize.util.data import (
+    revert_flattening,
+    has_bot_message,
+    clean_bot_message,
+    calc_max_length,
+    shrink,
+    has_repetition,
+    has_correct_roles,
+    has_empty_messages
+)
+from chai_prize.datasets.chai import parse_chai_conversation
 
 
 def calc_user_engagement(messages):
@@ -35,32 +33,6 @@ def calc_user_engagement(messages):
 
 def calc_bot_questions(messages):
     return sum([int("?" in m["content"]) for m in messages if m["role"] == "bot"])
-
-
-def shrink(chat, max_length):
-    length = calc_max_length([{"messages": chat}])
-    while length > max_length:
-        chat = chat[:-2]
-        length = calc_max_length([{"messages": chat}])
-    return chat
-
-
-def has_bot_message(chat):
-    roles = {m["role"] for m in chat}
-    return "bot" in roles
-
-
-def clean_bot_message(text):
-    text = " ".join(text.split())
-    text = text.replace('“', '"')
-    text = text.replace('”', '"')
-    return text
-
-
-def has_repetition(chat):
-    bot_messages = [m["content"] for m in chat if m["role"] == "bot"]
-    uniq_bot_messages = set(bot_messages)
-    return len(uniq_bot_messages) < len(bot_messages)
 
 
 def bot_has_long_answers(chat, min_chars: int = 150):
@@ -81,10 +53,6 @@ def bot_has_questions(chat, min_fraction: float = 0.6):
     bot_messages = [m["content"] for m in chat if m["role"] == "bot"]
     num_questions = calc_bot_questions(chat)
     return num_questions >= int(len(bot_messages) * min_fraction)
-
-
-def has_empty_messages(chat):
-    return sum([len(m["content"]) == 0 for m in chat]) >= 1
 
 
 def has_bad_ss(chat):
@@ -153,13 +121,6 @@ def is_good_feedback(feedback):
         if word in feedback.lower():
             return True
     return len(feedback.split()) >= 4
-
-
-def fix_bot_answers(chat):
-    for message in chat:
-        if message["role"] == "bot":
-            message["content"] = " ".join(message["content"].split())
-    return chat
 
 
 def add_ctrl_attributes(chat, row):
@@ -252,55 +213,6 @@ def process_rpr(
     return records
 
 
-def parse_chai_conversation(text):
-    char_name = text.split(":")[0]
-    current_role = "user"
-    current_text = text
-    user_name = "Anonymous user"
-
-    def parse_message(message, current_role):
-        if message.count(":") != 1:
-            return None
-        role, content = message.split(":")
-        if current_role == "bot":
-            assert role.strip() == char_name.strip(), role
-        else:
-            assert role.strip() == user_name.strip(), role
-        return {
-            "role": current_role,
-            "content": content.strip()
-        }
-
-    filtered_lines = [line for line in text.split("\n") if "(deleted)" not in line]
-    #has_deleted = False
-    #if len(filtered_lines) != len(text.split("\n")):
-    #    has_deleted = True
-    text = "\n".join(filtered_lines)
-    current_text = text
-
-    chat = []
-    while True:
-        str_to_find = user_name + ":" if current_role == "user" else char_name + ":"
-        message_end_pos = current_text.find(str_to_find)
-        current_role = "user" if current_role == "bot" else "bot"
-        if message_end_pos == -1:
-            message = current_text
-            parsed_message = parse_message(message, current_role)
-            if parsed_message is None:
-                return None
-            chat.append(parsed_message)
-            #if has_deleted:
-            #    print(chat)
-            return chat
-        message = current_text[:message_end_pos]
-        parsed_message = parse_message(message, current_role)
-        if parsed_message is None:
-            return None
-        chat.append(parsed_message)
-        current_text = current_text[message_end_pos:]
-    return chat
-
-
 def get_score(row, field):
     score  = row.get(field + "_score", 0)
     score = score if score else 0
@@ -339,18 +251,13 @@ def process_chai(
             continue
 
         text = row["conversation"]
-        if "INST" in text:
+        if "INST" in text or "START" in text:
             continue
 
         char_name = text.split(":")[0].strip()
-        chat = parse_chai_conversation(text)
+        chat = list(parse_chai_conversation(text))
+        chat = [{"role": m["role"], "content": m["content"]} for m in chat if not m["is_deleted"]]
         if not chat:
-            continue
-
-        if not has_bot_message(chat):
-            continue
-
-        if sum(["START" in m["content"] for m in chat]) > 0:
             continue
 
         if has_repetition(chat):
@@ -405,13 +312,14 @@ def process_chai(
         system_chat = [{"role": "system", "content": memory}, {"role": "prompt", "content": prompt}]
         chat = system_chat + chat
         chat = shrink(chat, max_length)
-        chat = fix_bot_answers(chat)
 
-        current_role = None
+        if not has_bot_message(chat):
+            continue
+
         for message in chat:
-            assert message["role"] != current_role, chat
-            current_role = message["role"]
-
+            content = message["content"]
+            content = content if message["role"] == "user" else clean_bot_message(content)
+            message["content"] = content
 
         if add_ctrl:
             row_counts = add_ctrl_attributes(chat, row)
@@ -518,8 +426,6 @@ def process_pippa(
 
         if random.random() > sample_rate:
             continue
-
-        chat = fix_bot_answers(chat)
 
         if add_ctrl:
             row_counts = add_ctrl_attributes(chat, row)
@@ -774,6 +680,8 @@ def main(config_path, output_dir):
         if not record["messages"]:
             continue
         if has_repetition(record["messages"]):
+            continue
+        if has_empty_messages(record["messages"]):
             continue
         cleaned_records.append(record)
     records = cleaned_records
