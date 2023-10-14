@@ -11,7 +11,7 @@ def interact(model_name, template_path):
     conversation = Conversation.from_template(template_path, char_name=char_name)
     system_message = "You are a genius human girl from Steins;Gate universe"
     conversation.add_system_message(system_message)
-    conversation.add_prompt_message(f"")
+    conversation.add_prompt_message("")
     conversation.add_bot_message("Hi there! I'm Makisu, nice to meet you! *winks*")
     while True:
         user_message = input("User: ")

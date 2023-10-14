@@ -81,7 +81,7 @@ def fix_tokenizer(tokenizer, model_config):
             model_config.unk_token_id,
             guessed_unk_token_id
         )
-        token_id, token = check_candidates(candidates, bad_ids, tokenizer, "<unk>")
+        token_id, token = _check_candidates(candidates, bad_ids, tokenizer, "<unk>")
         tokenizer.unk_token_id = token_id
         special_tokens["unk_token"] = token
 

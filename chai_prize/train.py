@@ -116,9 +116,6 @@ def train(
         config = json.load(r)
 
     device_map = "auto"
-    world_size = int(os.environ.get("WORLD_SIZE", 1))
-    ddp = world_size != 1
-
     deepspeed_config = config.get("deepspeed")
     trainer_config = config.get("trainer")
     lora_config = config.get("lora")
@@ -128,17 +125,10 @@ def train(
         save_total_limit=1,
         load_best_model_at_end=True,
         report_to=report_to,
-        ddp_find_unused_parameters=False if ddp else None,
         deepspeed=deepspeed_config,
         **trainer_config
     )
     model_name = config["model_name"]
-
-    if ddp:
-        device_map = {"": int(os.environ.get("LOCAL_RANK") or 0)}
-        gradient_accumulation_steps = trainer_config["gradient_accumulation_steps"]
-        gradient_accumulation_steps = gradient_accumulation_steps // world_size
-        trainer_config["gradient_accumulation_steps"] = gradient_accumulation_steps
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model_config = AutoConfig.from_pretrained(model_name)
@@ -153,7 +143,6 @@ def train(
     templates_path = config["templates_path"]
     only_target_loss = config.get("only_target_loss", True)
     max_tokens_count = config["max_tokens_count"]
-    add_global_eos = config.get("add_global_eos", True)
 
     datasets = []
     for records in (train_records, val_records):
@@ -162,8 +151,7 @@ def train(
             tokenizer,
             max_tokens_count=max_tokens_count,
             templates_path=templates_path,
-            only_target_loss=only_target_loss,
-            add_global_eos=add_global_eos,
+            only_target_loss=only_target_loss
         ))
     train_dataset, val_dataset = datasets
     data_collator = DataCollatorForTokenClassification(tokenizer)
@@ -216,11 +204,6 @@ def train(
         model = fix_model(model, tokenizer)
 
     model.config.max_length = max_tokens_count
-
-    if not ddp and torch.cuda.device_count() > 1:
-        model.is_parallelizable = True
-        model.model_parallel = True
-
     if lora_config:
         lora_config = LoraConfig(**lora_config)
         model = get_peft_model(model, lora_config)

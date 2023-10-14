@@ -7,7 +7,7 @@ from chai_guanaco.metrics import get_submission_metrics
 
 
 @auto_authenticate
-def fetch_my_submissions(developer_key, submission_ids = None):
+def fetch_my_submissions(developer_key, submission_ids: str = None):
     if submission_ids is not None:
         submission_ids = submission_ids.split(",")
     else:

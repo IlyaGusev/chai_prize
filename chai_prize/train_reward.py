@@ -6,7 +6,7 @@ import torch
 from tqdm import tqdm
 from torch.utils.data import Dataset
 from peft import LoraConfig, TaskType
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, TrainingArguments, AutoConfig
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig
 from trl import RewardTrainer, RewardConfig
 
 from chai_prize.conversation import Conversation

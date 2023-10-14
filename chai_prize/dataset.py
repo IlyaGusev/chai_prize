@@ -18,7 +18,6 @@ class ChatDataset(Dataset):
         templates_path: str,
         only_target_loss: bool = True,
         labels_pad_token_id: int = -100,
-        add_global_eos: bool = False
     ):
         self.templates_path = templates_path
         self.original_records = original_records
@@ -26,7 +25,6 @@ class ChatDataset(Dataset):
         self.max_tokens_count = max_tokens_count
         self.only_target_loss = only_target_loss
         self.labels_pad_token_id = labels_pad_token_id
-        self.add_global_eos = add_global_eos
         self.is_printed = False
 
         self.records = []
@@ -55,20 +53,17 @@ class ChatDataset(Dataset):
         conversation.expand(record["messages"])
 
         bot_messages = []
-        input_ids = []
         full_text = ""
-        num_messages = len(conversation.messages)
         for message, role in conversation.iter_messages():
-            message_input_ids = self.get_tokens(message)
-            if len(message_input_ids) + len(input_ids) > self.max_tokens_count - num_messages * 2:
+            new_text = full_text + message
+            new_input_ids = self.get_tokens(new_text)
+            if len(new_input_ids) > self.max_tokens_count - 2:
                 break
-            input_ids.extend(message_input_ids)
-            full_text += message
+            full_text = new_text
             if role == Conversation.BOT_ROLE:
                 bot_messages.append(message)
 
         input_ids = self.get_tokens(full_text)
-        labels = input_ids[:]
 
         if self.only_target_loss:
             labels = [self.labels_pad_token_id for _ in range(len(input_ids))]
@@ -82,6 +77,8 @@ class ChatDataset(Dataset):
                         break
                 else:
                     assert False
+        else:
+            labels = input_ids[:]
 
         if len(set(labels)) <= 2:
             return None
@@ -89,10 +86,6 @@ class ChatDataset(Dataset):
         if input_ids[0] != self.tokenizer.bos_token_id and random.random() < 0.7:
             input_ids.insert(0, self.tokenizer.bos_token_id)
             labels.insert(0, self.labels_pad_token_id)
-
-        if self.add_global_eos and input_ids[-1] != self.tokenizer.eos_token_id:
-            input_ids.append(self.tokenizer.eos_token_id)
-            labels.append(self.tokenizer.eos_token_id)
 
         if not self.is_printed:
             print(input_ids)

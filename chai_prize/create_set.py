@@ -17,7 +17,6 @@ from chai_prize.util.data import (
     calc_max_length,
     shrink,
     has_repetition,
-    has_correct_roles,
     has_empty_messages
 )
 from chai_prize.datasets.chai import parse_chai_conversation
@@ -67,6 +66,7 @@ def has_bad_ss(chat):
             if s in content:
                 return True
     return False
+
 
 def is_whitelisted_model(model_name):
     models = (
@@ -214,7 +214,7 @@ def process_rpr(
 
 
 def get_score(row, field):
-    score  = row.get(field + "_score", 0)
+    score = row.get(field + "_score", 0)
     score = score if score else 0
     return score
 
@@ -240,7 +240,6 @@ def process_chai(
     ctrl_counts = Counter()
     characters = {row["bot_id"]: row for row in load_dataset(character_dataset_name, split="train")}
     for row in tqdm(load_dataset(dataset_name, split="train")):
-        conversation_id = row["conversation_id"]
         bot_id = row["bot_id"]
 
         if bot_id not in characters:
@@ -554,7 +553,6 @@ def process_bluemoon(
 ):
     records = []
     for row in load_dataset(dataset_name, split="train"):
-        conversation_id = row["id"]
         chat = row["conversations"]
         for message in chat:
             role = message.pop("from")

@@ -1,22 +1,16 @@
 import os
 import json
-import copy
-from collections import Counter
 import random
 from pathlib import Path
-from statistics import median
 
 import fire
 from datasets import load_dataset
 from tqdm import tqdm
 
 from chai_prize.util.data import (
-    revert_flattening,
     has_bot_message,
-    clean_bot_message,
     calc_max_length,
     shrink,
-    has_repetition,
     has_correct_roles
 )
 from chai_prize.datasets.chai import parse_chai_conversation
@@ -53,10 +47,8 @@ def process_chai(
     only_whitelist: bool = False
 ):
     records = []
-    ctrl_counts = Counter()
     characters = {row["bot_id"]: row for row in load_dataset(character_dataset_name, split="train")}
     for row in tqdm(load_dataset(dataset_name, split="train")):
-        conversation_id = row["conversation_id"]
         bot_id = row["bot_id"]
 
         if bot_id not in characters:

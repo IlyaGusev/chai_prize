@@ -1,6 +1,4 @@
-import json
 import fire
-from datetime import datetime
 import chai_guanaco as chai
 from chai_prize.formatter import CustomFormatterV3
 
