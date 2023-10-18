@@ -34,6 +34,61 @@ def parse_chai_conversation(text):
         yield {"role": role, "content": "\n".join(lines).strip(), "is_deleted": is_deleted}
 
 
+def is_whitelisted_model(model_name):
+    models = (
+        "ilyagusev",
+        "khoantap",
+        "anhnv125",
+        "tokenbender",
+        "tehvenom",
+        "khanhnto",
+        "liquac09",
+        "monkeydddd",
+        "alkahestry",
+        "the-face-of-goonery",
+        "jnewber",
+        "chargoddard",
+        "ansoi"
+    )
+    for model in models:
+        if model in model_name:
+            return True
+    return False
+
+
+def is_good_feedback(feedback):
+    words = (
+        "wow",
+        "cool",
+        "like",
+        "nice",
+        "very",
+        "fun",
+        "love",
+        "great",
+        "fine",
+        "excellent",
+        "sex",
+        "accurate",
+        "pretty",
+        "aight",
+        "alright",
+        "interesting",
+        "better"
+        "goof",
+        "comforing",
+        "comforting",
+        "ok",
+        "okay",
+        "amazing",
+        "damn"
+    )
+    for word in words:
+        if word in feedback.lower():
+            return True
+    return len(feedback.split()) >= 4
+
+
 TEST_TEXT = """
 Bodyguard Konig: *your father wants you under watch after a pattern of
 reckless behaviours and partying.

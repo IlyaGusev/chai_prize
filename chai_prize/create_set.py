@@ -19,7 +19,11 @@ from chai_prize.util.data import (
     has_repetition,
     has_empty_messages
 )
-from chai_prize.datasets.chai import parse_chai_conversation
+from chai_prize.datasets.chai import (
+    parse_chai_conversation,
+    is_whitelisted_model,
+    is_good_feedback
+)
 
 
 def calc_user_engagement(messages):
@@ -66,61 +70,6 @@ def has_bad_ss(chat):
             if s in content:
                 return True
     return False
-
-
-def is_whitelisted_model(model_name):
-    models = (
-        "ilyagusev",
-        "khoantap",
-        "anhnv125",
-        "tokenbender",
-        "tehvenom",
-        "khanhnto",
-        "liquac09",
-        "monkeydddd",
-        "alkahestry",
-        "the-face-of-goonery",
-        "jnewber",
-        "chargoddard",
-        "ansoi"
-    )
-    for model in models:
-        if model in model_name:
-            return True
-    return False
-
-
-def is_good_feedback(feedback):
-    words = (
-        "wow",
-        "cool",
-        "like",
-        "nice",
-        "very",
-        "fun",
-        "love",
-        "great",
-        "fine",
-        "excellent",
-        "sex",
-        "accurate",
-        "pretty",
-        "aight",
-        "alright",
-        "interesting",
-        "better"
-        "goof",
-        "comforing",
-        "comforting",
-        "ok",
-        "okay",
-        "amazing",
-        "damn"
-    )
-    for word in words:
-        if word in feedback.lower():
-            return True
-    return len(feedback.split()) >= 4
 
 
 def add_ctrl_attributes(chat, row):
@@ -245,8 +194,7 @@ def process_chai(
         if bot_id not in characters:
             continue
 
-        thumbs_up = row["thumbs_up"]
-        if only_thumbs_up and not thumbs_up:
+        if only_thumbs_up and not row["thumbs_up"]:
             continue
 
         text = row["conversation"]

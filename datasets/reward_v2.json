@@ -1,5 +1,5 @@
 {
-    "mode": "deleted",
+    "mode": "full",
     "chai": {
         "sample_rate": 1.0,
         "max_length": 30000,

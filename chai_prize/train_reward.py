@@ -5,13 +5,14 @@ from typing import List, Dict
 import torch
 from tqdm import tqdm
 from torch.utils.data import Dataset
-from peft import LoraConfig, TaskType
+from peft import LoraConfig, TaskType, get_peft_model
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig
 from trl import RewardTrainer, RewardConfig
 
 from chai_prize.conversation import Conversation
 from chai_prize.util.io import read_jsonl
 from chai_prize.util.dl import fix_tokenizer, fix_model
+from chai_prize.train import custom_prepare_model_for_int8_training
 
 
 class ChatRewardDataset(Dataset):
@@ -32,13 +33,12 @@ class ChatRewardDataset(Dataset):
 
         self.records = []
         for record in tqdm(original_records):
-            assert record["context"][-1]["role"] == "user"
             chosen_record = {
-                "messages": record["context"] + [{"role": "bot", "content": record["chosen_message"]}],
+                "messages": record["chosen_messages"],
                 "char_name": record["char_name"]
             }
             rejected_record = {
-                "messages": record["context"] + [{"role": "bot", "content": record["rejected_message"]}],
+                "messages": record["rejected_messages"],
                 "char_name": record["char_name"]
             }
             chosen_tensors = self.convert_record(chosen_record)
@@ -135,14 +135,27 @@ def train(
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name,
         load_in_8bit=True,
-        torch_dtype=torch.float16,
-        device_map="auto"
+        device_map="auto",
+        torch_dtype=torch.bfloat16,
+        #use_flash_attention_2=True
     )
-    model = fix_model(model, tokenizer)
+    model = fix_model(model, tokenizer, use_resize=False)
+    model = custom_prepare_model_for_int8_training(model)
+    lora_config = LoraConfig(
+        task_type=TaskType.SEQ_CLS,
+        inference_mode=False,
+        r=8,
+        lora_alpha=16,
+        lora_dropout=0.1,
+        #target_modules=["q_proj", "v_proj", "k_proj", "o_proj", "down_proj", "up_proj"]
+    )
+    model = get_peft_model(model, lora_config)
+
     reward_config = RewardConfig(
         output_dir=output_dir,
         per_device_train_batch_size=1,
-        num_train_epochs=3,
+        per_device_eval_batch_size=1,
+        num_train_epochs=4,
         gradient_accumulation_steps=128,
         gradient_checkpointing=True,
         learning_rate=3e-4,
@@ -155,14 +168,7 @@ def train(
         warmup_steps=5,
         evaluation_strategy="steps",
         max_length=max_tokens_count,
-    )
-    peft_config = LoraConfig(
-        task_type=TaskType.SEQ_CLS,
-        inference_mode=False,
-        r=8,
-        lora_alpha=16,
-        lora_dropout=0.1,
-        target_modules=["q_proj", "v_proj", "k_proj", "o_proj"]
+        bf16=True
     )
     trainer = RewardTrainer(
         model=model,
@@ -170,7 +176,6 @@ def train(
         tokenizer=tokenizer,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
-        peft_config=peft_config
     )
 
     trainer.train()
