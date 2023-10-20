@@ -3,6 +3,20 @@ import chai_guanaco as chai
 from chai_prize.formatter import CustomFormatterV3
 
 
+class CustomModelSubmitter(chai.ModelSubmitter):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def submit(self, submission_params):
+        submission_params = self._preprocess_submission(submission_params)
+        submission_id = self._get_submission_id(submission_params)
+        self._print_submission_header(submission_id)
+        status = self._wait_for_model_submission(submission_id)
+        self._print_submission_result(status)
+        self._progress = 0
+        return submission_id
+
+
 def submit(model_url, **kwargs):
     generation_params = {
         "frequency_penalty": 0.45,
@@ -25,7 +39,7 @@ def submit(model_url, **kwargs):
         "formatter": CustomFormatterV3()
     }
 
-    submitter = chai.ModelSubmitter()
+    submitter = CustomModelSubmitter()
     submission_id = submitter.submit(submission_parameters)
     return submission_id.strip(), submission_parameters
 

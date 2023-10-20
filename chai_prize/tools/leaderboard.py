@@ -22,7 +22,6 @@ def fetch_my_submissions(developer_key, submission_ids: str = None):
 def main(submission_ids: str = None):
     df = fetch_my_submissions(submission_ids=submission_ids)
     pd.set_option('display.max_columns', 100)
-    df = df.drop(["thumbs_up_ratio_se", "user_engagement_se"], axis=1)
     print(df)
 
 
