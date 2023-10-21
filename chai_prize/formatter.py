@@ -17,20 +17,18 @@ class CustomFormatterV2(PromptFormatter):
     response_template = "<s>{bot_name}:"
 
 
-attributes = [
-    "Verbosity: high",
-    "Actions: many",
-    "Role play: 10",
-    "Consciousness: 10"
-]
-
-full_memory_template = "{bot_name}'s Persona: {memory}\n#### Controls:\n" + "\n".join(attributes) + "\n\n####\n"
+full_memory_template = "{bot_name}'s Persona: {memory}{controls}\n####\n"
 
 
 class CustomFormatterV3(PromptFormatter):
-    memory_template = "{bot_name}'s Persona: {memory}\n####\n"
+    memory_template = full_memory_template.format(controls="")
     prompt_template = "{bot_name}: *winks*\n{prompt}\n<START>\n"
     bot_template = "{bot_name}: {message}\n"
     user_template = "User: {message}\n"
     response_template = "{bot_name}:"
 
+    def __init__(self, *args, attributes=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if attributes:
+            controls = "\n#### Controls:\n{}".format("\n".join(attributes))
+            self.memory_template = full_memory_template.format(controls=controls)
