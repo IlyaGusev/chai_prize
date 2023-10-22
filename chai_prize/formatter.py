@@ -17,12 +17,12 @@ class CustomFormatterV2(PromptFormatter):
     response_template = "<s>{bot_name}:"
 
 
-full_memory_template = "{bot_name}'s Persona: {memory}{controls}\n####\n"
+full_memory_template = "{{bot_name}}'s Persona: {{memory}}{controls}\n####\n"
 
 
 class CustomFormatterV3(PromptFormatter):
     memory_template = full_memory_template.format(controls="")
-    prompt_template = "{bot_name}: *winks*\n{prompt}\n<START>\n"
+    prompt_template = "{prompt}\n<START>\n"
     bot_template = "{bot_name}: {message}\n"
     user_template = "User: {message}\n"
     response_template = "{bot_name}:"
