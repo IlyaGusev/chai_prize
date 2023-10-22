@@ -72,32 +72,36 @@ def has_bad_ss(chat):
     return False
 
 
-def add_ctrl_attributes(chat, row):
+DEFAULT_CONTROLS = {"verbosity", "actions", "creativity", "capriciousness", "fragility"}
+
+def add_ctrl_attributes(chat, row, controls=DEFAULT_CONTROLS):
     counts = Counter()
     attributes = []
     context = chat[0]["content"]
 
-    if bot_has_long_answers(chat):
-        counts["verbose"] += 1
-        attributes.append("Verbosity: high")
-    else:
-        attributes.append("Verbosity: low")
-
-    if "action_level_score" in row:
-        action_level_score = get_score(row, "action_level")
-        if action_level_score >= 7:
-            counts["actions"] += 1
-            attributes.append("Actions: many")
+    if "verbosity" in controls:
+        if bot_has_long_answers(chat):
+            counts["verbose"] += 1
+            attributes.append("Verbosity: high")
         else:
-            attributes.append("Actions: few")
-    else:
-        if bot_has_actions(chat):
-            counts["actions"] += 1
-            attributes.append("Actions: many")
-        else:
-            attributes.append("Actions: few")
+            attributes.append("Verbosity: low")
 
-    if "creativity_score" in row:
+    if "actions" in controls:
+        if "action_level_score" in row:
+            action_level_score = get_score(row, "action_level")
+            if action_level_score >= 7:
+                counts["actions"] += 1
+                attributes.append("Actions: many")
+            else:
+                attributes.append("Actions: few")
+        else:
+            if bot_has_actions(chat):
+                counts["actions"] += 1
+                attributes.append("Actions: many")
+            else:
+                attributes.append("Actions: few")
+
+    if "creativity" in controls and "creativity_score" in row:
         creativity_score = get_score(row, "creativity")
         if creativity_score >= 5:
             counts["creativity"] += 1
@@ -105,7 +109,7 @@ def add_ctrl_attributes(chat, row):
         else:
             attributes.append("Creativity: low")
 
-    if "capriciousness_score" in row:
+    if "capriciousness" in controls and "capriciousness_score" in row:
         capriciousness_score = get_score(row, "capriciousness")
         if capriciousness_score >= 4:
             counts["capriciousness"] += 1
@@ -113,7 +117,7 @@ def add_ctrl_attributes(chat, row):
         else:
             attributes.append("Capriciousness: low")
 
-    if "fragility_score" in row:
+    if "fragility" in controls and "fragility_score" in row:
         fragility_score = get_score(row, "fragility")
         if fragility_score >= 4:
             counts["fragility"] += 1

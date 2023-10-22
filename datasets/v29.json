@@ -1,0 +1,21 @@
+{
+    "pippa": {
+        "dataset_name": "IlyaGusev/pippa_scored",
+        "sample_rate": 1.0,
+        "max_length": 30000,
+        "add_ctrl": true
+    },
+    "chai": {
+        "dataset_name": "IlyaGusev/chai_scored",
+        "sample_rate": 1.0,
+        "max_length": 30000,
+        "add_ctrl": true
+    },
+    "rpr_ru": {
+        "sample_rate": 1.0,
+        "force_gpt4": true
+    },
+    "limarp": {
+        "sample_rate": 0.5
+    }
+}
