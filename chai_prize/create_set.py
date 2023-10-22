@@ -72,30 +72,60 @@ def has_bad_ss(chat):
     return False
 
 
-def add_ctrl_attributes(chat, row):
+DEFAULT_CONTROLS = {"verbosity", "actions", "creativity", "capriciousness", "fragility"}
+
+def add_ctrl_attributes(chat, row, controls=DEFAULT_CONTROLS):
     counts = Counter()
     attributes = []
     context = chat[0]["content"]
-    if bot_has_long_answers(chat):
-        counts["verbose"] += 1
-        attributes.append("Verbosity: high")
-    else:
-        attributes.append("Verbosity: low")
-    if bot_has_actions(chat):
-        counts["actions"] += 1
-        attributes.append("Actions: many")
-    else:
-        attributes.append("Actions: few")
 
-    role_play_score = row.get("role_play_score")
-    if role_play_score is not None:
-        attributes.append(f"Role play: {role_play_score}")
+    if "verbosity" in controls:
+        if bot_has_long_answers(chat):
+            counts["verbose"] += 1
+            attributes.append("Verbosity: high")
+        else:
+            attributes.append("Verbosity: low")
 
-    consciousness_score = row.get("consciousness_score")
-    if consciousness_score is not None:
-        attributes.append(f"Consciousness: {consciousness_score}")
+    if "actions" in controls:
+        if "action_level_score" in row:
+            action_level_score = get_score(row, "action_level")
+            if action_level_score >= 7:
+                counts["actions"] += 1
+                attributes.append("Actions: many")
+            else:
+                attributes.append("Actions: few")
+        else:
+            if bot_has_actions(chat):
+                counts["actions"] += 1
+                attributes.append("Actions: many")
+            else:
+                attributes.append("Actions: few")
 
-    context += "\n#### Controls:\n" + "\n".join(attributes) + "\n"
+    if "creativity" in controls and "creativity_score" in row:
+        creativity_score = get_score(row, "creativity")
+        if creativity_score >= 5:
+            counts["creativity"] += 1
+            attributes.append("Creativity: high")
+        else:
+            attributes.append("Creativity: low")
+
+    if "capriciousness" in controls and "capriciousness_score" in row:
+        capriciousness_score = get_score(row, "capriciousness")
+        if capriciousness_score >= 4:
+            counts["capriciousness"] += 1
+            attributes.append("Capriciousness: high")
+        else:
+            attributes.append("Capriciousness: low")
+
+    if "fragility" in controls and "fragility_score" in row:
+        fragility_score = get_score(row, "fragility")
+        if fragility_score >= 4:
+            counts["fragility"] += 1
+            attributes.append("Fragility: high")
+        else:
+            attributes.append("Fragility: low")
+
+    context += "\n#### Controls:\n" + "\n".join(attributes)
     chat[0]["content"] = context
     return counts
 

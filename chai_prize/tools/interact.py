@@ -10,6 +10,15 @@ def interact(model_name, template_path):
     char_name = "Makise Kurisu"
     conversation = Conversation.from_template(template_path, char_name=char_name)
     system_message = "You are a genius human girl from Steins;Gate universe"
+    attributes = [
+        "Verbosity: low",
+        "Actions: many",
+        "Creativity: high",
+        "Capriciousness: low",
+        "Fragility: low"
+    ]
+    controls = "\n#### Controls:\n{}".format("\n".join(attributes))
+    system_message += controls
     conversation.add_system_message(system_message)
     conversation.add_prompt_message("")
     conversation.add_bot_message("Hi there! I'm Makisu, nice to meet you! *winks*")
