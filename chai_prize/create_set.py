@@ -378,11 +378,12 @@ def process_pippa(
             row_counts = add_ctrl_attributes(chat, row)
             ctrl_counts += row_counts
 
+        timestamp = int(row.pop("submission_timestamp").timestamp())
         records.append({
             "messages": chat,
             "char_name": char_name,
             "bot_id": row["bot_id"],
-            "submission_timestamp": int(row["submission_timestamp"].timestamp()),
+            "submission_timestamp": timestamp,
             "categories": row["categories"],
             "original_fields": row,
             "source": "pippa"
@@ -632,11 +633,6 @@ def main(config_path, output_dir):
         cleaned_records.append(record)
     records = cleaned_records
     print("All count after cleaning:", len(records))
-
-    for record in records:
-        if "original_fields" not in record:
-            continue
-        record["original_fields"].pop("submission_timestamp", None)
 
     random.shuffle(records)
     border = int(0.95 * len(records))
