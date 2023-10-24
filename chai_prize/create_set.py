@@ -58,6 +58,30 @@ def bot_has_questions(chat, min_fraction: float = 0.6):
     return num_questions >= int(len(bot_messages) * min_fraction)
 
 
+def is_single_character(char_name):
+    characters = (
+        "straykids groupchat",
+        "Gojo,Sukuna, & Toji (CEO's)",
+        "All girls sleepover",
+        "two husbands",
+        "a group of bullies",
+        "Ghost, Soap and König",
+        "könig and ghost",
+        "All Female Prison",
+        "Mitsuri and Shinobu",
+        "Akaza, Douma, Kokushibo",
+        "Boys sleepover (-W_M-)",
+        "Fantasy RPG"
+    )
+    if " and " in char_name.lower():
+        return False
+    if "rpg" in char_name.lower():
+        return False
+    if "group" in char_name.lower():
+        return False
+    return char_name not in characters
+
+
 def has_bad_ss(chat):
     ss = (
         " AI",
@@ -255,7 +279,8 @@ def process_chai(
         if len(chat) < min_messages:
             continue
 
-        if not bot_has_actions(chat, min_action_heuristics_score):
+        is_single_char = is_single_character(char_name)
+        if is_single_char and not bot_has_actions(chat, min_action_heuristics_score):
             continue
 
         if only_whitelist and not is_whitelisted_model(row["model_name"]):
@@ -386,7 +411,8 @@ def process_pippa(
         if use_random_roles and random.random() < 0.1:
             chat[0]["content"], chat[1]["content"] = chat[1]["content"], chat[0]["content"]
 
-        if not bot_has_actions(chat, min_action_heuristics_score):
+        is_single_char = is_single_character(char_name)
+        if is_single_char and not bot_has_actions(chat, min_action_heuristics_score):
             continue
 
         if has_bad_ss(chat):

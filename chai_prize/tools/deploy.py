@@ -44,12 +44,17 @@ def deploy(
     current_wandb_id: str = None,
     min_top_p: float = 0.6,
     max_top_p: float = 1.0,
-    min_top_k: int = 10,
+    min_top_k: int = 30,
     max_top_k: int = 100,
     min_temperature: float = 0.8,
     max_temperature: float = 1.2,
     min_frequency_penalty: float = 0.1,
     max_frequency_penalty: float = 0.8,
+    use_attributes: bool = False,
+    prompt_prefix: str = "",
+    prompt_suffix: str = "",
+    memory_prefix: str = "",
+    memory_suffix: str = "",
 ):
     model_list = model_list.split(",")
     min_feedback_counts = {}
@@ -66,6 +71,11 @@ def deploy(
             frequency_penalty = random.uniform(min_frequency_penalty, max_frequency_penalty)
             submission_id, params = submit(
                 chosen_model,
+                use_attributes=use_attributes,
+                prompt_prefix=prompt_prefix,
+                prompt_suffix=prompt_suffix,
+                memory_prefix=memory_prefix,
+                memory_suffix=memory_suffix,
                 top_p=top_p,
                 top_k=top_k,
                 temperature=temperature,

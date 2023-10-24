@@ -17,7 +17,23 @@ class CustomModelSubmitter(chai.ModelSubmitter):
         return submission_id
 
 
-def submit(model_url, **kwargs):
+attributes = [
+    "Verbosity: low",
+    "Actions: many",
+    "Creativity: high",
+    "Capriciousness: low",
+    "Fragility: low"
+]
+
+def submit(
+    model_url: str,
+    use_attributes: bool = False,
+    prompt_prefix: str = "",
+    prompt_suffix: str = "",
+    memory_prefix: str = "",
+    memory_suffix: str = "",
+    **kwargs
+):
     generation_params = {
         "frequency_penalty": 0.45,
         "presence_penalty": 0.0,
@@ -32,11 +48,21 @@ def submit(model_url, **kwargs):
 
     print(generation_params)
     model_name = model_url.split("/")[-1]
+    formatter = CustomFormatterV3()
+    if not use_attributes:
+        attributes = None
+    formatter = CustomFormatterV3(
+        attributes=attributes,
+        prompt_prefix=prompt_prefix,
+        prompt_suffix=prompt_suffix,
+        memory_prefix=memory_prefix,
+        memory_suffix=memory_suffix
+    )
     submission_parameters = {
         "model_repo": model_url,
         "generation_params": generation_params,
         "model_name": model_name,
-        "formatter": CustomFormatterV3()
+        "formatter": formatter
     }
 
     submitter = CustomModelSubmitter()
