@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import copy
 from collections import Counter
@@ -17,7 +18,10 @@ from chai_prize.util.data import (
     calc_max_length,
     shrink,
     has_repetition,
-    has_empty_messages
+    has_empty_messages,
+    is_single_character,
+    has_bad_ss,
+    is_not_english
 )
 from chai_prize.datasets.chai import (
     parse_chai_conversation,
@@ -46,54 +50,44 @@ def bot_has_long_answers(chat, min_chars: int = 150):
     return result > min_chars
 
 
+ACTION_STAR_RE = re.compile(r'\*[^\*]+\*')
+ACTION_FANCY_QUOTES_RE = re.compile(r'“[^”]+”')
+ACTION_DOUBLE_QUOTES_RE = re.compile(r'"[^"]+"')
+
+
 def bot_has_actions(chat, min_fraction: float = 0.85):
     bot_messages = [m["content"] for m in chat if m["role"] == "bot"]
-    actions_count = sum([int("*" in m or '"' in m) for m in bot_messages])
-    return actions_count >= int(len(bot_messages) * min_fraction)
+
+    count_action_messages = 0
+    for message in bot_messages:
+        star_matches = ACTION_STAR_RE.findall(message)
+        if star_matches:
+            length = max(len(m) for m in star_matches)
+            if length >= 7:
+                count_action_messages += 1
+                continue
+        fancy_matches = ACTION_FANCY_QUOTES_RE.findall(message)
+        if fancy_matches:
+            length = sum(len(m) for m in fancy_matches)
+            action_length = len(message) - length
+            if action_length >= 7:
+                count_action_messages += 1
+                continue
+        quote_matches = ACTION_DOUBLE_QUOTES_RE.findall(message)
+        if quote_matches:
+            length = sum(len(m) for m in quote_matches)
+            action_length = len(message) - length
+            if action_length >= 7:
+                count_action_messages += 1
+                continue
+
+    return count_action_messages >= int(len(bot_messages) * min_fraction)
 
 
 def bot_has_questions(chat, min_fraction: float = 0.6):
     bot_messages = [m["content"] for m in chat if m["role"] == "bot"]
     num_questions = calc_bot_questions(chat)
     return num_questions >= int(len(bot_messages) * min_fraction)
-
-
-def is_single_character(char_name):
-    characters = (
-        "straykids groupchat",
-        "Gojo,Sukuna, & Toji (CEO's)",
-        "All girls sleepover",
-        "two husbands",
-        "a group of bullies",
-        "Ghost, Soap and König",
-        "könig and ghost",
-        "All Female Prison",
-        "Mitsuri and Shinobu",
-        "Akaza, Douma, Kokushibo",
-        "Boys sleepover (-W_M-)",
-        "Fantasy RPG"
-    )
-    if " and " in char_name.lower():
-        return False
-    if "rpg" in char_name.lower():
-        return False
-    if "group" in char_name.lower():
-        return False
-    return char_name not in characters
-
-
-def has_bad_ss(chat):
-    ss = (
-        " AI",
-        "language model",
-        "Chai"
-    )
-    for message in chat:
-        content = message["content"]
-        for s in ss:
-            if s in content:
-                return True
-    return False
 
 
 DEFAULT_CONTROLS = {"verbosity", "actions", "creativity", "capriciousness", "fragility"}
@@ -237,7 +231,8 @@ def process_chai(
     min_creativity: int = 0,
     min_action_heuristics_score: float = 0.0,
     min_user_engagement_heuristics_score: float = 0.0,
-    only_whitelist: bool = False
+    only_whitelist: bool = False,
+    boost_not_english: bool = False
 ):
     records = []
     ctrl_counts = Counter()
@@ -270,36 +265,10 @@ def process_chai(
         if has_bad_ss(chat):
             continue
 
-        if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
-            continue
-
-        if calc_bot_questions(chat) < min_num_bot_questions:
-            continue
-
-        if len(chat) < min_messages:
-            continue
-
-        is_single_char = is_single_character(char_name)
-        if is_single_char and not bot_has_actions(chat, min_action_heuristics_score):
-            continue
-
-        if only_whitelist and not is_whitelisted_model(row["model_name"]):
-            continue
-
-        if only_good_feedback and not is_good_feedback(row["feedback"]):
-            continue
-
-        if get_score(row, "action_level") < min_action_level:
-            continue
-
-        if get_score(row, "user_engagement") < min_user_engagement:
-            continue
-
-        if get_score(row, "creativity") < min_creativity:
-            continue
-
-        if random.random() > sample_rate:
-            continue
+        for message in chat:
+            content = message["content"]
+            content = content if message["role"] == "user" else clean_bot_message(content)
+            message["content"] = content
 
         character = characters[bot_id]
 
@@ -315,13 +284,44 @@ def process_chai(
         chat = system_chat + chat
         chat = shrink(chat, max_length)
 
+        if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
+            continue
+
+        if calc_bot_questions(chat) < min_num_bot_questions:
+            continue
+
+        if len(chat) < min_messages:
+            continue
+
+        if only_whitelist and not is_whitelisted_model(row["model_name"]):
+            continue
+
         if not has_bot_message(chat):
             continue
 
-        for message in chat:
-            content = message["content"]
-            content = content if message["role"] == "user" else clean_bot_message(content)
-            message["content"] = content
+        if boost_not_english and is_not_english(chat):
+            pass
+        else:
+            is_single_char = is_single_character(char_name)
+            if is_single_char and not bot_has_actions(chat, min_action_heuristics_score):
+                continue
+            if only_good_feedback and not is_good_feedback(row["feedback"]):
+                continue
+
+        if get_score(row, "action_level") < min_action_level:
+            continue
+
+        if get_score(row, "user_engagement") < min_user_engagement:
+            continue
+
+        if get_score(row, "creativity") < min_creativity:
+            continue
+
+        if random.random() > sample_rate:
+            continue
+
+        if not has_bot_message(chat):
+            continue
 
         if add_ctrl:
             row_counts = add_ctrl_attributes(chat, row)
@@ -406,6 +406,9 @@ def process_pippa(
 
         chat = shrink(chat, max_length)
         if not has_bot_message(chat):
+            continue
+
+        if has_repetition(chat):
             continue
 
         if use_random_roles and random.random() < 0.1:
@@ -684,7 +687,7 @@ def main(config_path, output_dir):
             continue
         if has_repetition(record["messages"]):
             continue
-        if has_empty_messages(record["messages"]):
+        if has_empty_messages(record["messages"][2:]):
             continue
         cleaned_records.append(record)
     records = cleaned_records

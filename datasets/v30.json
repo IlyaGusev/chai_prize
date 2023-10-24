@@ -3,7 +3,7 @@
         "sample_rate": 1.0,
         "max_length": 30000,
         "min_action_heuristics_score": 0.8,
-        "min_user_engagement_heuristics_score": 20.0,
+        "min_user_engagement_heuristics_score": 15.0,
         "min_messages": 6
     },
     "chai": {
@@ -14,6 +14,7 @@
         "only_thumbs_up": true,
         "only_good_feedback": true,
         "only_whitelist": true,
+        "boost_not_english": true,
         "min_messages": 4
     },
     "rpr_ru": {
