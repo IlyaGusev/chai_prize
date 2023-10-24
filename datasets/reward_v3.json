@@ -1,0 +1,9 @@
+{
+    "mode": "thumbs_up",
+    "chai": {
+        "sample_rate": 1.0,
+        "max_length": 30000,
+        "only_whitelist": true,
+        "min_messages": 4
+    }
+}
