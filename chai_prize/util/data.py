@@ -24,11 +24,17 @@ def calc_max_length(records):
     return max([sum([len(m["content"]) for m in r["messages"]]) for r in records])
 
 
+def remove_trailing_user_messages(chat):
+    while chat and chat[-1]["role"] == "user":
+        chat.pop()
+
+
 def shrink(messages, max_length):
     length = calc_max_length([{"messages": messages}])
     while length > max_length:
-        messages = messages[:-2]
+        messages.pop()
         length = calc_max_length([{"messages": messages}])
+    remove_trailing_user_messages(messages)
     return messages
 
 
@@ -37,55 +43,47 @@ def has_bot_message(messages):
     return "bot" in roles
 
 
-def has_repetition(messages):
-    bot_messages = [m["content"][:20] for m in messages if m["role"] == "bot"]
+def has_repetition(messages, prefix_length: int = 20):
+    bot_messages = [m["content"][:prefix_length] for m in messages if m["role"] == "bot"]
     uniq_bot_messages = set(bot_messages)
     return len(uniq_bot_messages) < len(bot_messages)
 
 
 def has_correct_roles(messages):
-    current_role = None
     for message in messages:
-        if message.get("is_deleted", False):
-            continue
-        if message["role"] == current_role:
-            return False
         if message["role"] not in ("system", "prompt", "bot", "user"):
             return False
-        current_role = message["role"]
     return True
 
 
-def has_empty_messages(messages):
-    return sum([len(m["content"]) == 0 for m in messages if m["role"] == "bot"]) >= 1
+def has_empty_bot_messages(messages):
+    return sum([len(m["content"].strip()) == 0 for m in messages if m["role"] == "bot"]) >= 1
 
 
 def is_single_character(char_name):
-    characters = (
-        "straykids groupchat",
-        "Gojo,Sukuna, & Toji (CEO's)",
-        "All girls sleepover",
-        "two husbands",
-        "a group of bullies",
-        "Ghost, Soap and König",
-        "könig and ghost",
-        "All Female Prison",
-        "Mitsuri and Shinobu",
-        "Akaza, Douma, Kokushibo",
-        "Boys sleepover (-W_M-)",
-        "Fantasy RPG",
-        "All boys school"
-    )
+    tokens = {token.lower() for token in char_name.split()}
     if " and " in char_name.lower():
+        return False
+    if "&" in char_name.lower():
+        return False
+    if "two" in tokens:
+        return False
+    if "all" in tokens:
         return False
     if "rpg" in char_name.lower():
         return False
     if "group" in char_name.lower():
         return False
+    if "game" in tokens:
+        return False
+    characters = (
+        "Akaza, Douma, Kokushibo",
+        "Boys sleepover (-W_M-)"
+    )
     return char_name not in characters
 
 
-def has_bad_ss(chat):
+def has_bad_keywords(chat):
     ss = (
         " AI",
         "language model",
@@ -93,9 +91,8 @@ def has_bad_ss(chat):
     )
     for message in chat:
         content = message["content"]
-        for s in ss:
-            if s in content:
-                return True
+        if any(s in content for s in ss):
+            return True
     return False
 
 
@@ -109,3 +106,25 @@ def is_not_english(chat):
     bot_language = Counter(bot_languages).most_common(1)[0][0]
     user_language = Counter(user_languages).most_common(1)[0][0]
     return bot_language == user_language and user_language != "en"
+
+
+def is_bad_chat(chat):
+    if not chat:
+        return True
+
+    if not has_correct_roles(chat):
+        return True
+
+    if has_repetition(chat):
+        return True
+
+    if has_empty_bot_messages(chat):
+        return True
+
+    if has_bad_keywords(chat):
+        return True
+
+    if not has_bot_message(chat):
+        return True
+
+    return False
