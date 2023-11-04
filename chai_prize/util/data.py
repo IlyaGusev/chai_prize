@@ -48,11 +48,21 @@ def normalize_whitespaces(text):
     return text
 
 
+def remove_quotes(text):
+    if len(text) <= 2:
+        return text
+    if text[0] == '"' and text[-1] == '"' and '"' not in text[1:-1]:
+        return text[1:-1]
+    return text
+
+
 def clean_bot_message(text):
     text = " ".join(text.split())
     for old, new in unicode_punctuation.items():
         text = text.replace(old, new)
     text = normalize_whitespaces(text)
+    text = remove_quotes(text)
+    text = text.replace("\*", "*")
     return text
 
 
