@@ -12,7 +12,8 @@ from chai_prize.util.data import (
     has_bot_message,
     calc_max_length,
     shrink,
-    has_correct_roles
+    has_correct_roles,
+    is_bad_chat
 )
 from chai_prize.datasets.chai import (
     parse_chai_conversation,
@@ -54,13 +55,13 @@ def process_chai(
         if only_good_feedback and not is_good_feedback(row["feedback"]):
             continue
 
+        if only_whitelist and not is_whitelisted_model(row["model_name"]):
+            continue
+
         if not has_bot_message(chat):
             continue
 
         if len(chat) < min_messages:
-            continue
-
-        if only_whitelist and not is_whitelisted_model(row["model_name"]):
             continue
 
         if not has_correct_roles(chat):
@@ -160,8 +161,8 @@ def main(config_path, output_dir):
             negative_records = [r for r in records if not r["original_fields"]["thumbs_up"]]
             if not positive_records or not negative_records:
                 continue
-            positive_records = positive_records[:5]
-            negative_records = negative_records[:5]
+            #positive_records = positive_records[:10]
+            #negative_records = negative_records[:10]
             for pos_record in positive_records:
                 for neg_record in negative_records:
                     final_records.append({
@@ -169,6 +170,17 @@ def main(config_path, output_dir):
                         "rejected_messages": neg_record["messages"],
                         "char_name": pos_record["char_name"]
                     })
+    elif config["mode"] == "thumbs_up_pointwise":
+        for conv_id, record in enumerate(chai_records):
+            messages = [m for m in record["messages"] if not m.get("is_deleted", False)]
+            if not messages:
+                continue
+            final_records.append({
+                "messages": messages,
+                "target": int(record["original_fields"]["thumbs_up"]),
+                "char_name": record["char_name"],
+                "conv_id": conv_id
+            })
     else:
         char_records = defaultdict(list)
         for conv_id, record in enumerate(chai_records):
@@ -179,7 +191,7 @@ def main(config_path, output_dir):
                 messages.pop()
             examples = []
             current_context = []
-            for message in messages:
+            for i, message in enumerate(messages):
                 if message.get("is_deleted", False):
                     examples.append({
                         "messages": current_context + [message],
@@ -189,14 +201,14 @@ def main(config_path, output_dir):
                     })
                     continue
                 current_context.append(message)
-                if message["role"] == "bot":
+                if message["role"] == "bot" and i >= 6:
                     examples.append({
                         "messages": current_context[:],
                         "conv_id": conv_id,
                         "char_name": record["char_name"],
                         "target": 1
                     })
-            if not record["is_shrinked"]:
+            if not record["is_shrinked"] and len(examples) > 1:
                 examples[-1]["target"] = 0
             final_records.extend(examples)
 

@@ -2,11 +2,57 @@ from collections import Counter
 
 from chai_prize.util.langdetect import detect_language
 
+unicode_punctuation = {
+    "，": ",",
+    "。": ".",
+    "、": ",",
+    "„": '"',
+    "”": '"',
+    "“": '"',
+    "«": '"',
+    "»": '"',
+    "１": '"',
+    "」": '"',
+    "「": '"',
+    "《": '"',
+    "》": '"',
+    "´": "'",
+    "∶": ":",
+    "：": ":",
+    "？": "?",
+    "！": "!",
+    "（": "(",
+    "）": ")",
+    "；": ";",
+    "–": "-",
+    "—": " - ",
+    "．": ". ",
+    "～": "~",
+    "’": "'",
+    "…": "...",
+    "━": "-",
+    "〈": "<",
+    "〉": ">",
+    "【": "[",
+    "】": "]",
+    "％": "%",
+    "►": "-",
+}
+
+whitespaces = {" ", " ", " ", " ", " ", "　", " ", " ", " ", " "}
+
+
+def normalize_whitespaces(text):
+    chars = [char if char not in whitespaces else " " for char in text]
+    text = "".join(chars)
+    return text
+
 
 def clean_bot_message(text):
     text = " ".join(text.split())
-    text = text.replace('“', '"')
-    text = text.replace('”', '"')
+    for old, new in unicode_punctuation.items():
+        text = text.replace(old, new)
+    text = normalize_whitespaces(text)
     return text
 
 

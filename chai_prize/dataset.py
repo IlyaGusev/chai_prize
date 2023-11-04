@@ -83,7 +83,7 @@ class ChatDataset(Dataset):
         if len(set(labels)) <= 2:
             return None
 
-        if input_ids[0] != self.tokenizer.bos_token_id and random.random() < 0.7:
+        if input_ids[0] != self.tokenizer.bos_token_id and random.random() < 0.5:
             input_ids.insert(0, self.tokenizer.bos_token_id)
             labels.insert(0, self.labels_pad_token_id)
 

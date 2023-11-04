@@ -1,3 +1,4 @@
+import json
 import random
 import fire
 from typing import List, Dict
@@ -7,8 +8,8 @@ import torch
 from tqdm import tqdm
 from torch.utils.data import Dataset
 from peft import LoraConfig, TaskType, get_peft_model
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig, TrainingArguments
-from trl import RewardTrainer, RewardConfig
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig, TrainingArguments, Trainer
+from trl import RewardTrainer
 
 from chai_prize.conversation import Conversation
 from chai_prize.util.io import read_jsonl
@@ -23,7 +24,8 @@ class ChatRewardDataset(Dataset):
         tokenizer: AutoTokenizer,
         max_tokens_count: int,
         templates_path: str,
-        labels_pad_token_id: int = -100
+        labels_pad_token_id: int = -100,
+        sample_rate: float = 1.0
     ):
         self.templates_path = templates_path
         self.original_records = original_records
@@ -31,9 +33,13 @@ class ChatRewardDataset(Dataset):
         self.max_tokens_count = max_tokens_count
         self.labels_pad_token_id = labels_pad_token_id
         self.is_printed = False
+        self.sample_rate = sample_rate
 
         self.records = []
         for record in tqdm(original_records):
+            if random.random() > self.sample_rate:
+                continue
+
             if "chosen_messages" in record:
                 chosen_record = {
                     "messages": record["chosen_messages"],
@@ -51,11 +57,9 @@ class ChatRewardDataset(Dataset):
                     "input_ids_chosen": chosen_tensors["input_ids"],
                     "attention_mask_chosen": chosen_tensors["attention_mask"],
                     "input_ids_rejected": rejected_tensors["input_ids"],
-                    "attention_mask_rejected": rejected_tensors["attention_mask"]
+                    "attention_mask_rejected": rejected_tensors["attention_mask"],
                 })
             else:
-                #if random.random() > 0.1:
-                #    continue
                 tensors = self.convert_record(record)
                 if not tensors:
                     continue
@@ -91,9 +95,27 @@ class ChatRewardDataset(Dataset):
             full_text = "".join([m for m, _ in messages])
             return len(self.get_tokens(full_text)) + 2
 
+        if calc_tokens_count(system_messages) > self.max_tokens_count // 2:
+            system_message, _ = system_messages[0]
+            prompt_message, _ = system_messages[1]
+            system_tokens = self.get_tokens(system_message)
+            prompt_tokens = self.get_tokens(prompt_message)
+            allowed_prompt_tokens = max(self.max_tokens_count // 2 - len(system_tokens), 0)
+            prompt_tokens = prompt_tokens[:allowed_prompt_tokens]
+            prompt_message = self.tokenizer.decode(prompt_tokens)
+            system_messages[1] = (prompt_message, "prompt")
+            if allowed_prompt_tokens == 0 and len(system_tokens) > self.max_tokens_count // 2:
+                system_tokens = system_tokens[:self.max_tokens_count // 2]
+                system_message = self.tokenizer.decode(system_tokens)
+                system_messages[0] = (system_message, "system")
+
+        message_count_estimate = self.max_tokens_count // 2 // 10
+        if len(other_messages) > message_count_estimate:
+            other_messages = other_messages[-message_count_estimate:]
+
         while calc_tokens_count(system_messages + other_messages) > self.max_tokens_count:
-            other_messages = other_messages[1:]
-            if len(other_messages) <= 1:
+            other_messages = other_messages[2:]
+            if len(other_messages) <= 2:
                 return None
 
         messages = system_messages + other_messages
@@ -129,87 +151,87 @@ def compute_metrics(eval_preds):
 
 
 def train(
-    model_name: str,
+    config_file: str,
     train_path: str,
     eval_path: str,
     output_dir: str,
-    templates_path: str,
-    max_tokens_count: int
+    sample_rate: float = 1.0
 ):
+    with open(config_file, "r") as r:
+        config = json.load(r)
+
+    model_name = config["model_name"]
     tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer.save_pretrained(output_dir)
     model_config = AutoConfig.from_pretrained(model_name)
     tokenizer = fix_tokenizer(tokenizer, model_config)
     train_records = read_jsonl(train_path)
+    is_pairwise = "chosen_messages" in train_records[0]
+    max_tokens_count = config["max_tokens_count"]
+    templates_path = config["templates_path"]
     train_dataset = ChatRewardDataset(
         train_records,
         tokenizer=tokenizer,
         max_tokens_count=max_tokens_count,
-        templates_path=templates_path
+        templates_path=templates_path,
+        sample_rate=sample_rate
     )
     eval_records = read_jsonl(eval_path)
     eval_dataset = ChatRewardDataset(
         eval_records,
         tokenizer=tokenizer,
         max_tokens_count=max_tokens_count,
-        templates_path=templates_path
+        templates_path=templates_path,
+        sample_rate=sample_rate
     )
+    print(train_dataset[0])
 
+    load_in_8bit = bool(config.get("load_in_8bit", False))
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name,
-        load_in_8bit=True,
+        load_in_8bit=load_in_8bit,
         device_map="auto",
         torch_dtype=torch.bfloat16,
-        #use_flash_attention_2=True
+        use_flash_attention_2=config.get("use_flash_attention_2", True)
     )
     model = fix_model(model, tokenizer, use_resize=False)
-    model = custom_prepare_model_for_int8_training(model)
-    lora_config = LoraConfig(
-        task_type=TaskType.SEQ_CLS,
-        inference_mode=False,
-        r=64,
-        lora_alpha=16,
-        lora_dropout=0.05,
-        #target_modules=["q_proj", "v_proj", "k_proj", "o_proj", "down_proj", "up_proj"]
-    )
-    model = get_peft_model(model, lora_config)
+    if load_in_8bit:
+        model = custom_prepare_model_for_int8_training(model)
 
-    #training_config = RewardConfig(
+    lora_config = config.get("lora")
+    if lora_config:
+        lora_config = LoraConfig(**lora_config)
+        model = get_peft_model(model, lora_config)
+
+    trainer_config = config.get("trainer")
     training_args = TrainingArguments(
         output_dir=output_dir,
-        per_device_train_batch_size=32,
-        per_device_eval_batch_size=32,
-        num_train_epochs=3,
-        gradient_accumulation_steps=8,
-        gradient_checkpointing=True,
-        learning_rate=3e-4,
+        save_total_limit=1,
+        load_best_model_at_end=True,
         report_to="wandb",
-        remove_unused_columns=False,
-        optim="adamw_torch",
-        logging_steps=1,
-        eval_steps=5,
-        save_steps=5,
-        warmup_steps=5,
-        evaluation_strategy="steps",
-        #max_length=max_tokens_count,
-        bf16=True
+        **trainer_config
     )
-    #trainer = RewardTrainer(
-    callbacks = [SavePeftModelCallback]
-    trainer = PeftTrainer(
+    callbacks = []
+    trainer_class = Trainer
+    if is_pairwise:
+        trainer_class = RewardTrainer
+    elif lora_config:
+        callbacks = [SavePeftModelCallback]
+        trainer_class = PeftTrainer
+
+    trainer = trainer_class(
         model=model,
         args=training_args,
         tokenizer=tokenizer,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         callbacks=callbacks,
-        compute_metrics=compute_metrics
-        #data_collator=data_collator
+        compute_metrics=None if is_pairwise else compute_metrics
     )
 
     trainer.train()
 
     model.save_pretrained(output_dir)
-    tokenizer.save_pretrained(output_dir)
 
 
 if __name__ == "__main__":

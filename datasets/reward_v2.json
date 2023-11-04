@@ -6,6 +6,6 @@
         "only_whitelist": true,
         "only_thumbs_up": true,
         "only_good_feedback": true,
-        "min_messages": 4
+        "min_messages": 6
     }
 }

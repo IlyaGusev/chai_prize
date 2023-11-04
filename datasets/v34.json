@@ -1,0 +1,20 @@
+{
+    "pippa": {
+        "sample_rate": 1.0,
+        "max_length": 30000,
+        "min_action_heuristics_score": 0.9,
+        "min_messages": 6,
+        "boost_not_english": true
+    },
+    "chai": {
+        "sample_rate": 1.0,
+        "max_length": 30000,
+        "min_action_heuristics_score": 0.9,
+        "only_thumbs_up": true,
+        "only_good_feedback": true,
+        "only_whitelist": true,
+        "boost_not_english": true,
+        "min_messages": 4,
+        "exclude_last_message": true
+    }
+}
