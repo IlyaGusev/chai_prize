@@ -161,15 +161,12 @@ def main(config_path, output_dir):
             negative_records = [r for r in records if not r["original_fields"]["thumbs_up"]]
             if not positive_records or not negative_records:
                 continue
-            #positive_records = positive_records[:10]
-            #negative_records = negative_records[:10]
-            for pos_record in positive_records:
-                for neg_record in negative_records:
-                    final_records.append({
-                        "chosen_messages": pos_record["messages"],
-                        "rejected_messages": neg_record["messages"],
-                        "char_name": pos_record["char_name"]
-                    })
+            for pos_record, neg_record in zip(positive_records, negative_records):
+                final_records.append({
+                    "chosen_messages": pos_record["messages"],
+                    "rejected_messages": neg_record["messages"],
+                    "char_name": pos_record["char_name"]
+                })
     elif config["mode"] == "thumbs_up_pointwise":
         for conv_id, record in enumerate(chai_records):
             messages = [m for m in record["messages"] if not m.get("is_deleted", False)]

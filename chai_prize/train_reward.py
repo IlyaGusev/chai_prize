@@ -84,30 +84,27 @@ class ChatRewardDataset(Dataset):
         )["input_ids"]
 
     def convert_record(self, record):
-        conversation = Conversation.from_template(self.templates_path, char_name=record["char_name"])
-        conversation.expand(record["messages"])
+        def calc_tokens_count(messages):
+            full_text = "".join([m["content"] for m in messages])
+            return len(self.get_tokens(full_text)) + 2
 
-        messages = list(conversation.iter_messages())
+        messages = record["messages"]
         system_messages = messages[:2]
         other_messages = messages[2:]
 
-        def calc_tokens_count(messages):
-            full_text = "".join([m for m, _ in messages])
-            return len(self.get_tokens(full_text)) + 2
-
         if calc_tokens_count(system_messages) > self.max_tokens_count // 2:
-            system_message, _ = system_messages[0]
-            prompt_message, _ = system_messages[1]
+            system_message  = system_messages[0]["content"]
+            prompt_message = system_messages[1]["content"]
             system_tokens = self.get_tokens(system_message)
             prompt_tokens = self.get_tokens(prompt_message)
             allowed_prompt_tokens = max(self.max_tokens_count // 2 - len(system_tokens), 0)
             prompt_tokens = prompt_tokens[:allowed_prompt_tokens]
             prompt_message = self.tokenizer.decode(prompt_tokens)
-            system_messages[1] = (prompt_message, "prompt")
+            system_messages[1]["content"] = prompt_message
             if allowed_prompt_tokens == 0 and len(system_tokens) > self.max_tokens_count // 2:
                 system_tokens = system_tokens[:self.max_tokens_count // 2]
                 system_message = self.tokenizer.decode(system_tokens)
-                system_messages[0] = (system_message, "system")
+                system_messages[0]["content"] = system_message
 
         message_count_estimate = self.max_tokens_count // 2 // 10
         if len(other_messages) > message_count_estimate:
@@ -119,6 +116,11 @@ class ChatRewardDataset(Dataset):
                 return None
 
         messages = system_messages + other_messages
+
+        conversation = Conversation.from_template(self.templates_path, char_name=record["char_name"])
+        conversation.expand(messages)
+
+        messages = list(conversation.iter_messages())
         full_text = "".join([m for m, _ in messages])
         input_ids = self.get_tokens(full_text)
 
@@ -133,7 +135,6 @@ class ChatRewardDataset(Dataset):
         input_ids = torch.LongTensor(input_ids)
         attention_mask = input_ids.new_ones(input_ids.size())
         assert input_ids.size(0) == attention_mask.size(0)
-        assert input_ids.size(0) <= self.max_tokens_count
 
         return {
             "input_ids": input_ids,
