@@ -1,8 +1,9 @@
 import os
 import json
+import copy
 import random
 from pathlib import Path
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 import fire
 from datasets import load_dataset
@@ -13,7 +14,10 @@ from chai_prize.util.data import (
     calc_max_length,
     shrink,
     has_correct_roles,
-    is_bad_chat
+    is_bad_chat,
+    has_repetition,
+    remove_trailing_user_messages,
+    bot_has_wrong_language
 )
 from chai_prize.datasets.chai import (
     parse_chai_conversation,
@@ -85,6 +89,9 @@ def process_chai(
         shrinked_chat = shrink(chat, max_length)
         is_shrinked = len(shrinked_chat) < len(chat)
         chat = shrinked_chat
+        remove_trailing_user_messages(chat)
+        if len(chat) < 5:
+            continue
 
         records.append({
             "messages": chat,
@@ -99,6 +106,55 @@ def process_chai(
     if records:
         print("Chai max length:", calc_max_length(records))
     return records
+
+
+def process_arena(
+    dataset_name: str = "lmsys/chatbot_arena_conversations",
+):
+    records = defaultdict(list)
+    for row in tqdm(load_dataset(dataset_name, split="train")):
+        model_a = row["model_a"]
+        model_b = row["model_b"]
+        model_a, model_a = sorted([model_a, model_b])
+        conversation_a = row["conversation_a"]
+        conversation_b = row["conversation_b"]
+        conv1, conv2 = sorted([str(conversation_a), str(conversation_b)])
+        qid = hash((conv1, conv2))
+        records[(qid, model_a, model_b)].append(row)
+    final_records = []
+    for idx, (_, question_records) in enumerate(records.items()):
+        cnt = Counter()
+        for r in question_records:
+            if r["winner"] in ("tie", "tie (bothbad)"):
+                continue
+            cnt[r[r["winner"]]] += 1
+        if not cnt:
+            continue
+        winner_model = cnt.most_common(1)[0][0]
+        record = question_records[0]
+        conv_a = record["conversation_a"]
+        conv_b = record["conversation_b"]
+        for m in conv_a:
+            if m["role"] == "assistant":
+                m["role"] = "bot"
+        for m in conv_b:
+            if m["role"] == "assistant":
+                m["role"] = "bot"
+        assert winner_model in (record["model_a"], record["model_b"])
+        chosen_messages = conv_a if record["model_a"] == winner_model else conv_b
+        rejected_messages = conv_b if record["model_a"] == winner_model else conv_a
+        char_name = "Arena bot {}".format(idx)
+        chosen_messages.insert(0, {"role": "system", "content": "You are a helpful assistant"})
+        chosen_messages.insert(1, {"role": "prompt", "content": ""})
+        rejected_messages.insert(0, {"role": "system", "content": "You are a helpful assistant"})
+        rejected_messages.insert(1, {"role": "prompt", "content": ""})
+        final_records.append({
+            "chosen_messages": chosen_messages,
+            "rejected_messages": rejected_messages,
+            "char_name": char_name
+        })
+    print("Arena count: {}".format(len(final_records)))
+    return final_records
 
 
 def is_close(message1, message2):
@@ -116,10 +172,17 @@ def main(config_path, output_dir):
     chai_records = process_chai(**config.get("chai"))
 
     final_records = []
-    if config["mode"] == "deleted":
+    modes = config["modes"]
+
+    if "arena" in modes:
+        final_records.extend(process_arena())
+
+    if "deleted" in modes:
         for record in chai_records:
             chat = record["messages"]
             if sum([m.get("is_deleted", False) for m in chat]) == 0:
+                continue
+            if not record["original_fields"]["thumbs_up"]:
                 continue
 
             deleted_messages = []
@@ -131,7 +194,8 @@ def main(config_path, output_dir):
 
                 if len(deleted_messages) >= 1 and len(deleted_messages) <= 2:
                     for rejected_message in deleted_messages:
-                        assert prev_messages[-1]["role"] == "user"
+                        if prev_messages[-1]["role"] != "user":
+                            continue
                         if rejected_message == message["content"]:
                             continue
                         if not message["content"].strip():
@@ -150,24 +214,82 @@ def main(config_path, output_dir):
 
                 deleted_messages = []
                 prev_messages.append(message)
-    elif config["mode"] == "thumbs_up":
+
+    if "thumbs_up" in modes:
         char_records = defaultdict(list)
         for record in chai_records:
             record["messages"] = [m for m in record["messages"] if not m.get("is_deleted", False)]
             char_records[record["bot_id"]].append(record)
 
         for _, records in char_records.items():
-            positive_records = [r for r in records if r["original_fields"]["thumbs_up"]]
-            negative_records = [r for r in records if not r["original_fields"]["thumbs_up"]]
+            positive_records = []
+            negative_records = []
+            for r in records:
+                assert r["messages"][-1]["role"] == "bot", r["messages"][-1]["role"]
+                is_thumbs_up = r["original_fields"]["thumbs_up"]
+                is_repeating = has_repetition(r["messages"][-4:], prefix_length=30)
+                has_wrong_language = bot_has_wrong_language(r["messages"])
+                if has_wrong_language:
+                    negative_records.append(r)
+                    continue
+                if is_repeating:
+                    negative_records.append(r)
+                    continue
+                if is_thumbs_up:
+                    positive_records.append(r)
+                    continue
+                negative_records.append(r)
+
             if not positive_records or not negative_records:
                 continue
+            random.shuffle(positive_records)
+            random.shuffle(negative_records)
+            char_name = positive_records[0]["char_name"]
+
             for pos_record, neg_record in zip(positive_records, negative_records):
                 final_records.append({
                     "chosen_messages": pos_record["messages"],
                     "rejected_messages": neg_record["messages"],
-                    "char_name": pos_record["char_name"]
+                    "char_name": char_name
                 })
-    elif config["mode"] == "thumbs_up_pointwise":
+            for pos_record in positive_records:
+                messages = pos_record["messages"]
+                if len(messages) >= 7 and random.random() < config.get("aug_swap_prob", 0.0):
+                    neg_messages = copy.deepcopy(messages)
+                    bot_message_indices = [i for i, m in enumerate(messages) if m["role"] == "bot"][:-1]
+                    swap_index = random.choice(bot_message_indices)
+                    neg_messages[-1], neg_messages[swap_index] = messages[swap_index], messages[-1]
+                    final_records.append({
+                        "chosen_messages": messages[:],
+                        "rejected_messages": neg_messages,
+                        "char_name": char_name,
+                        "aug": "swap"
+                    })
+                if random.random() < config.get("aug_empty_prob", 0.0):
+                    neg_messages = copy.deepcopy(messages)
+                    neg_messages[-1]["content"] = ""
+                    final_records.append({
+                        "chosen_messages": messages[:],
+                        "rejected_messages": neg_messages,
+                        "char_name": char_name,
+                        "aug": "empty"
+                    })
+                if random.random() < config.get("aug_shuffle_prob", 0.0):
+                    neg_messages = copy.deepcopy(messages)
+                    content = neg_messages[-1]["content"]
+                    words = content.split()
+                    random.shuffle(words)
+                    new_content = " ".join(words)
+                    if new_content != content:
+                        neg_messages[-1]["content"] = new_content
+                    final_records.append({
+                        "chosen_messages": messages[:],
+                        "rejected_messages": neg_messages,
+                        "char_name": char_name,
+                        "aug": "shuffle"
+                    })
+
+    if "thumbs_up_pointwise" in modes:
         for conv_id, record in enumerate(chai_records):
             messages = [m for m in record["messages"] if not m.get("is_deleted", False)]
             if not messages:
@@ -178,37 +300,6 @@ def main(config_path, output_dir):
                 "char_name": record["char_name"],
                 "conv_id": conv_id
             })
-    else:
-        char_records = defaultdict(list)
-        for conv_id, record in enumerate(chai_records):
-            messages = record["messages"][:]
-            if not messages:
-                continue
-            while messages[-1]["role"] != "bot" and not messages[-1].get("is_deleted", False):
-                messages.pop()
-            examples = []
-            current_context = []
-            for i, message in enumerate(messages):
-                if message.get("is_deleted", False):
-                    examples.append({
-                        "messages": current_context + [message],
-                        "char_name": record["char_name"],
-                        "conv_id": conv_id,
-                        "target": 0
-                    })
-                    continue
-                current_context.append(message)
-                if message["role"] == "bot" and i >= 6:
-                    examples.append({
-                        "messages": current_context[:],
-                        "conv_id": conv_id,
-                        "char_name": record["char_name"],
-                        "target": 1
-                    })
-            if not record["is_shrinked"] and len(examples) > 1:
-                examples[-1]["target"] = 0
-            final_records.extend(examples)
-
     print("All count after cleaning:", len(final_records))
 
     char_names = list({r["char_name"] for r in final_records})
@@ -217,7 +308,9 @@ def main(config_path, output_dir):
     train_chars = set(char_names[:border])
     val_chars = set(char_names[border:])
     train_records = [r for r in final_records if r["char_name"] in train_chars]
+    random.shuffle(train_records)
     val_records = [r for r in final_records if r["char_name"] in val_chars]
+    random.shuffle(val_records)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     with open(os.path.join(output_dir, "train.jsonl"), "w") as w:

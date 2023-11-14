@@ -81,8 +81,11 @@ def calc_max_length(records):
 
 
 def remove_trailing_user_messages(chat):
-    while chat and chat[-1]["role"] == "user":
+    while chat and (chat[-1]["role"] == "user" or chat[-1].get("is_deleted", False)):
         chat.pop()
+    if chat:
+        assert chat[-1]["role"] != "user"
+    return chat
 
 
 def shrink(messages, max_length):
@@ -152,16 +155,25 @@ def has_bad_keywords(chat):
     return False
 
 
+def calc_main_language(chat, role):
+    messages = [m["content"] for m in chat if m["role"] == role][1:]
+    if not messages:
+        return None
+    languages = [detect_language(message) for message in messages]
+    language = Counter(languages).most_common(1)[0][0]
+    return language
+
+
 def is_not_english(chat):
-    bot_messages = [m["content"] for m in chat if m["role"] == "bot"][1:]
-    user_messages = [m["content"] for m in chat if m["role"] == "user"]
-    if not bot_messages or not user_messages:
-        return False
-    bot_languages = [detect_language(message) for message in bot_messages]
-    user_languages = [detect_language(message) for message in user_messages]
-    bot_language = Counter(bot_languages).most_common(1)[0][0]
-    user_language = Counter(user_languages).most_common(1)[0][0]
+    bot_language = calc_main_language(chat, "bot")
+    user_language = calc_main_language(chat, "user")
     return bot_language == user_language and user_language != "en"
+
+
+def bot_has_wrong_language(chat):
+    bot_language = calc_main_language(chat, "bot")
+    user_language = calc_main_language(chat, "user")
+    return bot_language != user_language
 
 
 def is_bad_chat(chat):

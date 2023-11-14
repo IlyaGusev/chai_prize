@@ -20,6 +20,7 @@ from chai_prize.util.data import (
     shrink,
     is_single_character,
     is_not_english,
+    bot_has_wrong_language,
     remove_trailing_user_messages
 )
 from chai_prize.datasets.chai import (
@@ -31,6 +32,14 @@ from chai_prize.datasets.chai import (
 
 def calc_user_engagement(messages):
     response_length = [len(m["content"]) for m in messages if m["role"] == "user"]
+    if len(response_length) <= 1:
+        return 0.0
+    response_length = response_length[1:]
+    return median(response_length)
+
+
+def calc_bot_engagement(messages):
+    response_length = [len(m["content"]) for m in messages if m["role"] == "bot"]
     if len(response_length) <= 1:
         return 0.0
     response_length = response_length[1:]
@@ -218,8 +227,10 @@ def process_chai(
     min_scores: Optional[Dict[str, int]] = None,
     min_action_heuristics_score: float = 0.0,
     min_user_engagement_heuristics_score: float = 0.0,
+    min_bot_engagement_heuristics_score: float = 0.0,
     only_whitelist: bool = False,
     boost_not_english: bool = False,
+    only_same_language: bool = False,
     exclude_last_message: bool = False,
     max_char_chats: Optional[int] = None
 ):
@@ -278,11 +289,16 @@ def process_chai(
         if only_whitelist and not is_whitelisted_model(row["model_name"]):
             continue
 
+        if only_same_language and bot_has_wrong_language(chat):
+            continue
+
         if not boost_not_english or not is_not_english(chat):
             if is_single_character(char_name):
                 if not bot_has_actions(chat, min_action_heuristics_score):
                     continue
                 if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
+                    continue
+                if calc_bot_engagement(chat) < min_bot_engagement_heuristics_score:
                     continue
             if only_good_feedback and not is_good_feedback(row["feedback"]):
                 continue
@@ -331,13 +347,16 @@ def process_pippa(
     min_scores: Optional[Dict[str, int]] = None,
     min_action_heuristics_score: float = 0.0,
     min_user_engagement_heuristics_score: float = 0.0,
+    min_bot_engagement_heuristics_score: float = 0.0,
     boost_not_english: bool = False,
+    only_same_language: bool = False,
     max_char_chats: Optional[int] = None
 ):
     records = []
 
     ctrl_counts = Counter()
     char_counts = Counter()
+    fingerprints = set()
     for row in tqdm(load_dataset(dataset_name, split="train")):
         # Parse
         context = row["bot_description"]
@@ -345,6 +364,11 @@ def process_pippa(
         messages = revert_flattening(row["conversation"])
         if len(messages) < min_messages:
             continue
+
+        fingerprint = "\n".join([m["message"] for m in messages[:4]])
+        if fingerprint in fingerprints:
+            continue
+        fingerprints.add(fingerprint)
 
         chat = [{"role": "system", "content": context}]
 
@@ -379,11 +403,16 @@ def process_pippa(
         if is_bad_chat(chat):
             continue
 
+        if only_same_language and bot_has_wrong_language(chat):
+            continue
+
         if not boost_not_english or not is_not_english(chat):
             if is_single_character(char_name):
                 if not bot_has_actions(chat, min_action_heuristics_score):
                     continue
                 if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
+                    continue
+                if calc_bot_engagement(chat) < min_bot_engagement_heuristics_score:
                     continue
 
         if min_scores:

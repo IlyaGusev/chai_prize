@@ -9,7 +9,7 @@ from tqdm import tqdm
 from torch.utils.data import Dataset
 from peft import LoraConfig, TaskType, get_peft_model
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig, TrainingArguments, Trainer
-from trl import RewardTrainer
+from trl import RewardTrainer, RewardConfig
 
 from chai_prize.conversation import Conversation
 from chai_prize.util.io import read_jsonl
@@ -121,6 +121,12 @@ class ChatRewardDataset(Dataset):
         conversation.expand(messages)
 
         messages = list(conversation.iter_messages())
+
+        first_message, first_role = messages[2]
+        first_message_index = random.randint(0, len(first_message) - 1)
+        first_message = first_message[first_message_index:]
+        messages[2] = (first_message, first_role)
+
         full_text = "".join([m for m, _ in messages])
         input_ids = self.get_tokens(full_text)
 
@@ -205,20 +211,23 @@ def train(
         model = get_peft_model(model, lora_config)
 
     trainer_config = config.get("trainer")
-    training_args = TrainingArguments(
+    callbacks = []
+    trainer_class = Trainer
+    args_class = TrainingArguments
+    if is_pairwise:
+        trainer_class = RewardTrainer
+        args_class = RewardConfig
+    elif lora_config:
+        callbacks = [SavePeftModelCallback]
+        trainer_class = PeftTrainer
+
+    training_args = args_class(
         output_dir=output_dir,
         save_total_limit=1,
         load_best_model_at_end=True,
         report_to="wandb",
         **trainer_config
     )
-    callbacks = []
-    trainer_class = Trainer
-    if is_pairwise:
-        trainer_class = RewardTrainer
-    elif lora_config:
-        callbacks = [SavePeftModelCallback]
-        trainer_class = PeftTrainer
 
     trainer = trainer_class(
         model=model,

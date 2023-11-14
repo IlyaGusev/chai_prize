@@ -1,11 +1,12 @@
 {
-    "mode": "deleted",
+    "modes": ["thumbs_up"],
     "chai": {
         "sample_rate": 1.0,
-        "max_length": 30000,
-        "only_whitelist": true,
-        "only_thumbs_up": true,
-        "only_good_feedback": true,
-        "min_messages": 4
-    }
+        "max_length": 20000,
+        "only_whitelist": false,
+        "min_messages": 6
+    },
+    "aug_swap_prob": 0.3,
+    "aug_empty_prob": 0.001,
+    "aug_shuffle_prob": 0.01
 }
