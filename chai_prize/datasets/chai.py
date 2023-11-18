@@ -57,7 +57,24 @@ def is_whitelisted_model(model_name):
 
 
 def is_good_feedback(feedback):
+    bad_words = (
+        "meh",
+        "idk",
+        "mid",
+        "repeat",
+        "mediocre",
+        "average"
+    )
+    for word in bad_words:
+        if word in feedback.lower():
+            return False
+    if len(feedback.split()) >= 3:
+        return True
     words = (
+        "cute",
+        "good",
+        "gud",
+        "yes",
         "wow",
         "cool",
         "like",
@@ -81,12 +98,52 @@ def is_good_feedback(feedback):
         "ok",
         "okay",
         "amazing",
-        "damn"
+        "damn",
+        "gusta",
+        "awesome",
+        "not bad",
+        "hot",
+        "lol",
+        "xd",
+        "buena",
+        "perfect",
+        "норм",
+        "классно",
+        "epic",
+        "uwu",
+        "🌟",
+        "best",
+        "bien",
+        "ดี",
+        ":)",
+        "⭐",
+        "👍🏻",
+        "👍",
+        "❤️ ",
+        "decent",
+        "beautiful",
+        "god",
+        "funny",
+        "smash",
+        "kind",
+        "bueno",
+        "normal",
+        "fantastic",
+        "something",
+        "handsome",
+        "reasonable",
+        "agradable",
+        "genial",
+        "better",
+        "delightful",
+        "intresting",
+        "super",
+        "omg"
     )
     for word in words:
         if word in feedback.lower():
             return True
-    return len(feedback.split()) >= 4
+    return False
 
 
 TEST_TEXT = """

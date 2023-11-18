@@ -18,7 +18,7 @@ def interact(model_name, template_path):
         "Fragility: low"
     ]
     controls = "\n#### Controls:\n{}".format("\n".join(attributes))
-    system_message += controls
+    #system_message += controls
     conversation.add_system_message(system_message)
     conversation.add_prompt_message("")
     conversation.add_bot_message("Hi there! I'm Makisu, nice to meet you! *winks*")

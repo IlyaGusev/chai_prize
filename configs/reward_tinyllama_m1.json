@@ -1,0 +1,27 @@
+{
+    "trainer": {
+        "evaluation_strategy": "steps",
+        "per_device_train_batch_size": 2,
+        "per_device_eval_batch_size": 2,
+        "gradient_accumulation_steps": 256,
+        "eval_steps": 8,
+        "save_steps": 8,
+        "logging_steps": 1,
+        "learning_rate": 0.0002,
+        "num_train_epochs": 2,
+        "lr_scheduler_type": "cosine",
+        "warmup_steps": 8,
+        "fp16": false,
+        "bf16": true,
+        "torch_compile": false,
+        "gradient_checkpointing": false,
+        "optim": "adamw_torch",
+        "weight_decay": 0.05,
+        "max_grad_norm": 10.0,
+        "max_length": 1024
+    },
+    "load_in_8bit": false,
+    "templates_path": "prompts/prompt_v3.json",
+    "model_name": "PY007/TinyLlama-1.1B-intermediate-step-480k-1T",
+    "max_tokens_count": 512
+}

@@ -67,30 +67,33 @@ class ChatDataset(Dataset):
 
         if self.only_target_loss:
             labels = [self.labels_pad_token_id for _ in range(len(input_ids))]
+            prev_idx = 0
             for message in bot_messages:
                 message_tokens = self.get_tokens("\n" + message)
                 message_tokens = message_tokens[2:]
                 tokens_count = len(message_tokens)
-                for idx in range(len(labels) - tokens_count + 1):
+                message_found = False
+                for idx in range(prev_idx, len(labels) - tokens_count + 1):
                     if input_ids[idx: idx + tokens_count] == message_tokens:
                         labels[idx: idx + tokens_count] = message_tokens
+                        message_found = True
+                        prev_idx = idx + tokens_count
                         break
-                else:
-                    assert False
+                assert message_found
         else:
             labels = input_ids[:]
 
         if len(set(labels)) <= 2:
             return None
 
-        if input_ids[0] != self.tokenizer.bos_token_id and random.random() < 0.7:
+        if input_ids[0] != self.tokenizer.bos_token_id and random.random() < 0.5:
             input_ids.insert(0, self.tokenizer.bos_token_id)
             labels.insert(0, self.labels_pad_token_id)
 
         if not self.is_printed:
+            print("Full prompt:", self.tokenizer.decode(input_ids, skip_special_tokens=False))
             print(input_ids)
             print(labels)
-            print("Full prompt:", self.tokenizer.decode(input_ids, skip_special_tokens=False))
             self.is_printed = True
 
         input_ids = torch.LongTensor(input_ids)

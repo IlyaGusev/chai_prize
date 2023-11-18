@@ -1,8 +1,10 @@
 import os
+import re
 import json
 import copy
-from collections import Counter
 import random
+from typing import Dict, Optional
+from collections import Counter
 from pathlib import Path
 from statistics import median
 
@@ -11,13 +13,15 @@ from datasets import load_dataset
 from tqdm import tqdm
 
 from chai_prize.util.data import (
+    is_bad_chat,
     revert_flattening,
-    has_bot_message,
     clean_bot_message,
     calc_max_length,
     shrink,
-    has_repetition,
-    has_empty_messages
+    is_single_character,
+    is_not_english,
+    bot_has_wrong_language,
+    remove_trailing_user_messages
 )
 from chai_prize.datasets.chai import (
     parse_chai_conversation,
@@ -34,8 +38,12 @@ def calc_user_engagement(messages):
     return median(response_length)
 
 
-def calc_bot_questions(messages):
-    return sum([int("?" in m["content"]) for m in messages if m["role"] == "bot"])
+def calc_bot_engagement(messages):
+    response_length = [len(m["content"]) for m in messages if m["role"] == "bot"]
+    if len(response_length) <= 1:
+        return 0.0
+    response_length = response_length[1:]
+    return median(response_length)
 
 
 def bot_has_long_answers(chat, min_chars: int = 150):
@@ -46,57 +54,42 @@ def bot_has_long_answers(chat, min_chars: int = 150):
     return result > min_chars
 
 
+ACTION_STAR_RE = re.compile(r'\*[^\*]+\*')
+ACTION_FANCY_QUOTES_RE = re.compile(r'“[^”]+”')
+ACTION_DOUBLE_QUOTES_RE = re.compile(r'"[^"]+"')
+
+
 def bot_has_actions(chat, min_fraction: float = 0.85):
     bot_messages = [m["content"] for m in chat if m["role"] == "bot"]
-    actions_count = sum([int("*" in m or '"' in m) for m in bot_messages])
-    return actions_count >= int(len(bot_messages) * min_fraction)
 
+    count_action_messages = 0
+    for message in bot_messages:
+        star_matches = ACTION_STAR_RE.findall(message)
+        if star_matches:
+            length = max(len(m) for m in star_matches)
+            if length >= 7:
+                count_action_messages += 1
+                continue
+        fancy_matches = ACTION_FANCY_QUOTES_RE.findall(message)
+        if fancy_matches:
+            length = sum(len(m) for m in fancy_matches)
+            action_length = len(message) - length
+            if action_length >= 7:
+                count_action_messages += 1
+                continue
+        quote_matches = ACTION_DOUBLE_QUOTES_RE.findall(message)
+        if quote_matches:
+            length = sum(len(m) for m in quote_matches)
+            action_length = len(message) - length
+            if action_length >= 7:
+                count_action_messages += 1
+                continue
 
-def bot_has_questions(chat, min_fraction: float = 0.6):
-    bot_messages = [m["content"] for m in chat if m["role"] == "bot"]
-    num_questions = calc_bot_questions(chat)
-    return num_questions >= int(len(bot_messages) * min_fraction)
-
-
-def is_single_character(char_name):
-    characters = (
-        "straykids groupchat",
-        "Gojo,Sukuna, & Toji (CEO's)",
-        "All girls sleepover",
-        "two husbands",
-        "a group of bullies",
-        "Ghost, Soap and König",
-        "könig and ghost",
-        "All Female Prison",
-        "Mitsuri and Shinobu",
-        "Akaza, Douma, Kokushibo",
-        "Boys sleepover (-W_M-)",
-        "Fantasy RPG"
-    )
-    if " and " in char_name.lower():
-        return False
-    if "rpg" in char_name.lower():
-        return False
-    if "group" in char_name.lower():
-        return False
-    return char_name not in characters
-
-
-def has_bad_ss(chat):
-    ss = (
-        " AI",
-        "language model",
-        "Chai"
-    )
-    for message in chat:
-        content = message["content"]
-        for s in ss:
-            if s in content:
-                return True
-    return False
+    return count_action_messages >= int(len(bot_messages) * min_fraction)
 
 
 DEFAULT_CONTROLS = {"verbosity", "actions", "creativity", "capriciousness", "fragility"}
+
 
 def add_ctrl_attributes(chat, row, controls=DEFAULT_CONTROLS):
     counts = Counter()
@@ -227,30 +220,32 @@ def process_chai(
     dataset_name: str = "ChaiML/20231007_chai_prize_model_feedback_all",
     character_dataset_name: str = "ChaiML/seasonIII_chatAI_configurations",
     max_length: int = 20000,
-    min_num_bot_questions: int = 0,
     add_ctrl: bool = False,
     min_messages: int = 4,
     only_thumbs_up: bool = False,
     only_good_feedback: bool = False,
-    min_action_level: int = 0,
-    min_user_engagement: int = 0,
-    min_creativity: int = 0,
+    min_scores: Optional[Dict[str, int]] = None,
     min_action_heuristics_score: float = 0.0,
     min_user_engagement_heuristics_score: float = 0.0,
-    only_whitelist: bool = False
+    min_bot_engagement_heuristics_score: float = 0.0,
+    only_whitelist: bool = False,
+    boost_not_english: bool = False,
+    only_same_language: bool = False,
+    exclude_last_message: bool = False,
+    max_char_chats: Optional[int] = None
 ):
     records = []
     ctrl_counts = Counter()
+    char_counts = Counter()
     characters = {row["bot_id"]: row for row in load_dataset(character_dataset_name, split="train")}
     for row in tqdm(load_dataset(dataset_name, split="train")):
+        # Join
         bot_id = row["bot_id"]
-
         if bot_id not in characters:
             continue
+        character = characters[bot_id]
 
-        if only_thumbs_up and not row["thumbs_up"]:
-            continue
-
+        # Parse conversations
         text = row["conversation"]
         if "INST" in text or "START" in text:
             continue
@@ -258,50 +253,19 @@ def process_chai(
         char_name = text.split(":")[0].strip()
         chat = list(parse_chai_conversation(text))
         chat = [{"role": m["role"], "content": m["content"]} for m in chat if not m["is_deleted"]]
+        remove_trailing_user_messages(chat)
         if not chat:
             continue
-
-        if has_repetition(chat):
-            continue
-
-        if has_empty_messages(chat):
-            continue
-
-        if has_bad_ss(chat):
-            continue
-
-        if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
-            continue
-
-        if calc_bot_questions(chat) < min_num_bot_questions:
-            continue
-
+        if exclude_last_message:
+            chat.pop()
+        remove_trailing_user_messages(chat)
         if len(chat) < min_messages:
             continue
 
-        is_single_char = is_single_character(char_name)
-        if is_single_char and not bot_has_actions(chat, min_action_heuristics_score):
-            continue
-
-        if only_whitelist and not is_whitelisted_model(row["model_name"]):
-            continue
-
-        if only_good_feedback and not is_good_feedback(row["feedback"]):
-            continue
-
-        if get_score(row, "action_level") < min_action_level:
-            continue
-
-        if get_score(row, "user_engagement") < min_user_engagement:
-            continue
-
-        if get_score(row, "creativity") < min_creativity:
-            continue
-
-        if random.random() > sample_rate:
-            continue
-
-        character = characters[bot_id]
+        for message in chat:
+            content = message["content"]
+            content = content if message["role"] == "user" else clean_bot_message(content)
+            message["content"] = content
 
         memory = character["memory"]
         memory = memory if memory else ""
@@ -315,13 +279,45 @@ def process_chai(
         chat = system_chat + chat
         chat = shrink(chat, max_length)
 
-        if not has_bot_message(chat):
+        # Filter
+        if is_bad_chat(chat):
             continue
 
-        for message in chat:
-            content = message["content"]
-            content = content if message["role"] == "user" else clean_bot_message(content)
-            message["content"] = content
+        if only_thumbs_up and not row["thumbs_up"]:
+            continue
+
+        if only_whitelist and not is_whitelisted_model(row["model_name"]):
+            continue
+
+        if only_same_language and bot_has_wrong_language(chat):
+            continue
+
+        if not boost_not_english or not is_not_english(chat):
+            if is_single_character(char_name):
+                if not bot_has_actions(chat, min_action_heuristics_score):
+                    continue
+                if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
+                    continue
+                if calc_bot_engagement(chat) < min_bot_engagement_heuristics_score:
+                    continue
+            if only_good_feedback and not is_good_feedback(row["feedback"]):
+                continue
+
+        if min_scores:
+            is_bad = False
+            for key, min_score in min_scores.items():
+                if get_score(row, key) < min_score:
+                    is_bad = True
+            if is_bad:
+                continue
+
+        if random.random() > sample_rate:
+            continue
+
+        char_counts[char_name] += 1
+        if max_char_chats is not None:
+            if char_counts[char_name] > max_char_chats:
+                continue
 
         if add_ctrl:
             row_counts = add_ctrl_attributes(chat, row)
@@ -346,25 +342,33 @@ def process_pippa(
     sample_rate: float = 1.0,
     max_length: int = 20000,
     dataset_name: str = "PygmalionAI/PIPPA",
-    min_num_bot_questions: int = 0,
-    use_random_roles: bool = False,
     add_ctrl: bool = False,
     min_messages: int = 4,
-    min_action_level: int = 0,
-    min_user_engagement: int = 0,
-    min_creativity: int = 0,
+    min_scores: Optional[Dict[str, int]] = None,
     min_action_heuristics_score: float = 0.0,
-    min_user_engagement_heuristics_score: float = 0.0
+    min_user_engagement_heuristics_score: float = 0.0,
+    min_bot_engagement_heuristics_score: float = 0.0,
+    boost_not_english: bool = False,
+    only_same_language: bool = False,
+    max_char_chats: Optional[int] = None
 ):
     records = []
 
     ctrl_counts = Counter()
+    char_counts = Counter()
+    fingerprints = set()
     for row in tqdm(load_dataset(dataset_name, split="train")):
+        # Parse
         context = row["bot_description"]
         char_name = row["bot_name"].strip()
         messages = revert_flattening(row["conversation"])
         if len(messages) < min_messages:
             continue
+
+        fingerprint = "\n".join([m["message"] for m in messages[:4]])
+        if fingerprint in fingerprints:
+            continue
+        fingerprints.add(fingerprint)
 
         chat = [{"role": "system", "content": context}]
 
@@ -377,12 +381,7 @@ def process_pippa(
             prompt = prompt.replace("{{random_user_" + str(i) + "}}", "User")
         prompt = prompt.replace("{{char}}", char_name)
         prompt = prompt.strip()
-        if use_random_roles and random.random() < 0.1:
-            prompt = ""
-        chat.append({
-            "role": "prompt",
-            "content": prompt
-        })
+        chat.append({"role": "prompt", "content": prompt})
 
         for message in messages:
             role = "user" if message["is_human"] else "bot"
@@ -398,37 +397,39 @@ def process_pippa(
         if sum(["{{user}}" in message["message"] for message in messages[1:]]) > 0:
             continue
 
-        if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
-            continue
-
-        if calc_bot_questions(chat) < min_num_bot_questions:
-            continue
-
         chat = shrink(chat, max_length)
-        if not has_bot_message(chat):
+
+        # Filter
+        if is_bad_chat(chat):
             continue
 
-        if use_random_roles and random.random() < 0.1:
-            chat[0]["content"], chat[1]["content"] = chat[1]["content"], chat[0]["content"]
-
-        is_single_char = is_single_character(char_name)
-        if is_single_char and not bot_has_actions(chat, min_action_heuristics_score):
+        if only_same_language and bot_has_wrong_language(chat):
             continue
 
-        if has_bad_ss(chat):
-            continue
+        if not boost_not_english or not is_not_english(chat):
+            if is_single_character(char_name):
+                if not bot_has_actions(chat, min_action_heuristics_score):
+                    continue
+                if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
+                    continue
+                if calc_bot_engagement(chat) < min_bot_engagement_heuristics_score:
+                    continue
 
-        if get_score(row, "action_level") < min_action_level:
-            continue
-
-        if get_score(row, "user_engagement") < min_user_engagement:
-            continue
-
-        if get_score(row, "creativity") < min_creativity:
-            continue
+        if min_scores:
+            is_bad = False
+            for key, min_score in min_scores.items():
+                if get_score(row, key) < min_score:
+                    is_bad = True
+            if is_bad:
+                continue
 
         if random.random() > sample_rate:
             continue
+
+        char_counts[char_name] += 1
+        if max_char_chats is not None:
+            if char_counts[char_name] > max_char_chats:
+                continue
 
         if add_ctrl:
             row_counts = add_ctrl_attributes(chat, row)
@@ -444,6 +445,7 @@ def process_pippa(
             "original_fields": row,
             "source": "pippa"
         })
+
     if ctrl_counts:
         print("CTRL:", ctrl_counts)
     print("PIPPA count:", len(records))
@@ -538,8 +540,6 @@ def process_limarp(
 
     final_records = []
     for record in records:
-        if not has_bot_message(record["messages"]):
-            continue
         if random.random() < sample_rate:
             final_records.append(record)
     records = final_records
@@ -572,7 +572,7 @@ def process_bluemoon(
         }]
         chat = system_messages + chat
         chat = shrink(chat, max_length)
-        if not has_bot_message(chat):
+        if is_bad_chat(chat):
             continue
         records.append({
             "messages": chat,
@@ -612,7 +612,7 @@ def process_ao3(
                 "content": message["content"].strip()
             })
         chat = shrink(chat, max_length)
-        if not has_bot_message(chat):
+        if is_bad_chat(chat):
             continue
         records.append({
             "messages": chat,
@@ -674,20 +674,7 @@ def main(config_path, output_dir):
         records += gpteacher_records
 
     # Final processing
-    cleaned_records = []
-    for record in tqdm(records):
-        messages = record["messages"]
-        roles = {m["role"] for m in messages}
-        for role in roles:
-            assert role in ("bot", "user", "system", "prompt"), role
-        if not record["messages"]:
-            continue
-        if has_repetition(record["messages"]):
-            continue
-        if has_empty_messages(record["messages"]):
-            continue
-        cleaned_records.append(record)
-    records = cleaned_records
+    records = [r for r in records if not is_bad_chat(r["messages"])]
     print("All count after cleaning:", len(records))
 
     random.shuffle(records)
