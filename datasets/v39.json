@@ -1,0 +1,33 @@
+{
+    "pippa": {
+        "sample_rate": 1.0,
+        "max_length": 30000,
+        "min_action_heuristics_score": 0.75,
+        "min_bot_engagement_heuristics_score": 230.0,
+        "min_messages": 6,
+        "boost_not_english": true,
+        "only_same_language": true
+    },
+    "chai": {
+        "dataset_name": "IlyaGusev/20231007_chai_prize_model_feedback_all",
+        "character_dataset_name": "IlyaGusev/season_iii_chat_ai_configurations",
+        "sample_rate": 1.0,
+        "max_length": 30000,
+        "min_action_heuristics_score": 0.98,
+        "min_bot_engagement_heuristics_score": 180.0,
+        "only_thumbs_up": true,
+        "only_good_feedback": true,
+        "only_whitelist": true,
+        "boost_not_english": true,
+        "min_messages": 4,
+        "exclude_last_message": true,
+        "only_same_language": true
+    },
+    "rpr_ru": {
+        "sample_rate": 0.5,
+        "force_gpt4": false
+    },
+    "limarp": {
+        "sample_rate": 0.4
+    }
+}
