@@ -32,6 +32,7 @@ def submit(
     prompt_suffix: str = "",
     memory_prefix: str = "",
     memory_suffix: str = "",
+    reward_url: str = None,
     **kwargs
 ):
     generation_params = {
@@ -62,9 +63,12 @@ def submit(
         "model_repo": model_url,
         "generation_params": generation_params,
         "model_name": model_name,
-        "formatter": formatter
+        "formatter": formatter,
     }
+    if reward_url:
+        submission_parameters["reward_repo"] = reward_url
 
+    print(submission_parameters)
     submitter = CustomModelSubmitter()
     submission_id = submitter.submit(submission_parameters)
     return submission_id.strip(), submission_parameters

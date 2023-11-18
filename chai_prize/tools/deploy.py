@@ -34,22 +34,25 @@ def get_submission_metrics(submission_id):
 
 def deploy(
     model_list: str,
-    thumbs_up_threshold: int = 0.65,
-    user_writing_speed_threshold: float = 3.0,
-    reject_feedback_count: int = 100,
-    accept_feedback_count: int = 110,
+    reward_url: str = None,
+    thumbs_up_threshold: int = 0.7,
+    user_writing_speed_threshold: float = 2.8,
+    reject_feedback_count: int = 120,
+    accept_feedback_count: int = 150,
     interval: int = 30,
     current_submission_id: str = None,
     current_chosen_model: str = None,
     current_wandb_id: str = None,
-    min_top_p: float = 0.6,
+    min_top_p: float = 0.8,
     max_top_p: float = 1.0,
-    min_top_k: int = 30,
-    max_top_k: int = 100,
-    min_temperature: float = 0.8,
-    max_temperature: float = 1.2,
-    min_frequency_penalty: float = 0.1,
-    max_frequency_penalty: float = 0.8,
+    min_top_k: int = 20,
+    max_top_k: int = 50,
+    min_temperature: float = 0.9,
+    max_temperature: float = 1.1,
+    min_frequency_penalty: float = 0.0,
+    max_frequency_penalty: float = 0.2,
+    max_input_tokens: int = 2048,
+    best_of: int = 4,
     use_attributes: bool = False,
     prompt_prefix: str = "",
     prompt_suffix: str = "",
@@ -71,6 +74,7 @@ def deploy(
             frequency_penalty = random.uniform(min_frequency_penalty, max_frequency_penalty)
             submission_id, params = submit(
                 chosen_model,
+                reward_url=reward_url,
                 use_attributes=use_attributes,
                 prompt_prefix=prompt_prefix,
                 prompt_suffix=prompt_suffix,
@@ -78,8 +82,10 @@ def deploy(
                 memory_suffix=memory_suffix,
                 top_p=top_p,
                 top_k=top_k,
+                max_input_tokens=max_input_tokens,
                 temperature=temperature,
-                frequency_penalty=frequency_penalty
+                frequency_penalty=frequency_penalty,
+                best_of=best_of
             )
             params.pop("formatter")
             params["timestamp"] = int(datetime.now().timestamp())
@@ -90,7 +96,10 @@ def deploy(
             chosen_model = current_chosen_model
             current_submission_id = None
             current_chosen_model = None
-            wandb.init(project="chai_prize", name=submission_id, id=current_wandb_id, resume="must")
+            if current_wandb_id:
+                wandb.init(project="chai_prize", name=submission_id, id=current_wandb_id, resume="must")
+            else:
+                wandb.init(project="chai_prize", name=submission_id)
 
         while True:
             print("Submission ID:", submission_id)
