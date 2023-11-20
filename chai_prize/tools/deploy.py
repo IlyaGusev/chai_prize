@@ -5,6 +5,7 @@ from datetime import datetime
 import fire
 import wandb
 import chai_guanaco as chai
+from tqdm import tqdm
 from chai_guanaco.metrics import FeedbackMetrics
 from chai_guanaco.login_cli import auto_authenticate
 from chai_guanaco.feedback import _get_latest_feedback
@@ -30,6 +31,40 @@ def get_submission_metrics(submission_id):
             'user_writing_speed': feedback_metrics.user_writing_speed,
         }
     return metrics
+
+
+def iterate_prev_submissions(submission_id):
+    base_name = "_".join(submission_id.split("_")[:-1])
+    version = int(submission_id.split("_")[-1][1:])
+    for i in range(1, version + 3):
+        prev_submission_id = f"{base_name}_v{i}"
+        metrics = get_submission_metrics(prev_submission_id)
+        yield prev_submission_id, metrics
+
+
+def get_prev_submissions_max_feedback_count(submission_id):
+    total_feedback_count = 0
+    for prev_submission_id, metrics in iterate_prev_submissions(submission_id):
+        if metrics:
+            total_feedback_count = max(metrics["total_feedback_count"], total_feedback_count)
+    return total_feedback_count
+
+
+def compare_metrics(metrics1, metrics2):
+    score1 = metrics1["thumbs_up_ratio"] * (2.3 - metrics1["user_writing_speed"])
+    score2 = metrics2["thumbs_up_ratio"] * (2.3 - metrics2["user_writing_speed"])
+    return score1 < score2
+
+
+def get_best_past_metrics(submission_id):
+    best_metrics = None
+    total_feedback_count = 0
+    for prev_submission_id, metrics in iterate_prev_submissions(submission_id):
+        if metrics and metrics["total_feedback_count"] > total_feedback_count:
+            if metrics["total_feedback_count"] >= 150:
+                best_metrics = metrics
+                total_feedback_count = max(metrics["total_feedback_count"], total_feedback_count)
+    return best_metrics
 
 
 def deploy(
@@ -103,8 +138,23 @@ def deploy(
 
         while True:
             print("Submission ID:", submission_id)
-            metrics = get_submission_metrics(submission_id)
 
+            prev_feedback_count = get_prev_submissions_max_feedback_count(submission_id)
+            min_feedback_counts[chosen_model] = max(min_feedback_counts[chosen_model], prev_feedback_count)
+            print("Prev feedback count:", prev_feedback_count)
+
+            past_metrics = None
+            if chosen_model in final_metrics:
+                past_metrics = final_metrics[chosen_model]
+            true_past_metrics = get_best_past_metrics(submission_id)
+            if true_past_metrics:
+                if past_metrics is None:
+                    final_metrics[chosen_model] = true_past_metrics
+                elif compare_metrics(past_metrics, true_past_metrics):
+                    final_metrics[chosen_model] = true_past_metrics
+                print("Prev best metrics:", final_metrics[chosen_model])
+
+            metrics = get_submission_metrics(submission_id)
             print("Metrics:", metrics)
             total_feedback_count = metrics.get("total_feedback_count", 0)
             wandb.log(metrics, step=total_feedback_count)
@@ -128,13 +178,9 @@ def deploy(
                 break
 
             # Early stopping because of bad metrics compared to prev model
-            if chosen_model in final_metrics and total_feedback_count > min_feedback_counts[chosen_model] - 20:
+            if chosen_model in final_metrics and total_feedback_count > min_feedback_counts[chosen_model] - 30:
                 past_metrics = final_metrics[chosen_model]
-                past_thumbs_up_ratio = past_metrics["thumbs_up_ratio"]
-                past_user_writing_speed = past_metrics["user_writing_speed"]
-                past_score = past_thumbs_up_ratio * (2.3 - past_user_writing_speed)
-                current_score = thumbs_up_ratio * (2.3 - user_writing_speed)
-                if current_score < past_score:
+                if compare_metrics(metrics, past_metrics):
                     chai.deactivate_model(submission_id)
                     print("Stopping because of bad metrics!")
                     print("Past metrics:", str(past_metrics))
