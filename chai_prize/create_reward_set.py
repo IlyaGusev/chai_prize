@@ -288,6 +288,17 @@ def main(config_path, output_dir):
                         "char_name": char_name,
                         "aug": "shuffle"
                     })
+                if len(messages) >= 7 and random.random() < config.get("aug_repeat_prob", 0.0):
+                    neg_messages = copy.deepcopy(messages)
+                    prev_bot_message = [m for i, m in enumerate(messages) if m["role"] == "bot"][-2]
+                    assert messages[-1]["role"] == "bot"
+                    neg_messages[-1]["content"] = prev_bot_message["content"]
+                    final_records.append({
+                        "chosen_messages": messages[:],
+                        "rejected_messages": neg_messages,
+                        "char_name": char_name,
+                        "aug": "repeat"
+                    })
 
     if "thumbs_up_pointwise" in modes:
         for conv_id, record in enumerate(chai_records):

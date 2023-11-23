@@ -16,7 +16,7 @@
         "optim": "adamw_torch"
     },
     "lora": {
-        "r": 32,
+        "r": 16,
         "lora_alpha": 16,
         "lora_dropout": 0.1,
         "bias": "none",
@@ -27,6 +27,6 @@
     "only_target_loss": true,
     "add_global_eos": false,
     "templates_path": "prompts/prompt_v3.json",
-    "model_name": "models/openchat_3.5",
+    "model_name": "models/neural-chat-7b-v3",
     "max_tokens_count": 2560
 }
