@@ -178,8 +178,6 @@ def train(
             use_flash_attention_2=use_flash_attention_2
         )
         model = fix_model(model, tokenizer, use_resize=False)
-        model = custom_prepare_model_for_int8_training(model)
-
     elif load_in_4bit:
         assert not load_in_8bit
         model = AutoModelForCausalLM.from_pretrained(
@@ -194,17 +192,17 @@ def train(
                 bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4"
             ),
-            torch_dtype=torch_dtype
+            torch_dtype=torch_dtype,
+            use_flash_attention_2=use_flash_attention_2
         )
         model = fix_model(model, tokenizer, use_resize=False)
-        model = prepare_model_for_kbit_training(model)
-
     else:
         model = AutoModelForCausalLM.from_pretrained(model_name)
         model = fix_model(model, tokenizer)
 
     model.config.max_length = max_tokens_count
     if lora_config:
+        model = custom_prepare_model_for_int8_training(model)
         lora_config = LoraConfig(**lora_config)
         model = get_peft_model(model, lora_config)
 

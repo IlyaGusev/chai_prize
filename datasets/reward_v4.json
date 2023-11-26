@@ -1,0 +1,15 @@
+{
+    "modes": ["thumbs_up"],
+    "chai": {
+        "sample_rate": 1.0,
+        "max_length": 20000,
+        "only_whitelist": true,
+        "min_messages": 6,
+        "dataset_name": "IlyaGusev/20231007_chai_prize_model_feedback_all",
+        "character_dataset_name": "IlyaGusev/season_iii_chat_ai_configurations"
+    },
+    "aug_swap_prob": 0.3,
+    "aug_repeat_prob": 0.01,
+    "aug_empty_prob": 0.001,
+    "aug_shuffle_prob": 0.01
+}

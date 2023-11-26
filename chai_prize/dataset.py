@@ -79,7 +79,9 @@ class ChatDataset(Dataset):
                         message_found = True
                         prev_idx = idx + tokens_count
                         break
-                assert message_found
+                if not message_found:
+                    print("Error! No message found")
+                    return None
         else:
             labels = input_ids[:]
 
