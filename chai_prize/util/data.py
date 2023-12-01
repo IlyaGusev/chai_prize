@@ -196,3 +196,29 @@ def is_bad_chat(chat):
         return True
 
     return False
+
+
+ACTION_STAR_RE = re.compile(r'\*[^\*]+\*')
+ACTION_FANCY_QUOTES_RE = re.compile(r'“[^”]+”')
+ACTION_DOUBLE_QUOTES_RE = re.compile(r'"[^"]+"')
+
+
+def has_actions(message, min_length: int = 7):
+    star_matches = ACTION_STAR_RE.findall(message)
+    if star_matches:
+        length = max(len(m) for m in star_matches)
+        if length >= min_length:
+            return True
+    fancy_matches = ACTION_FANCY_QUOTES_RE.findall(message)
+    if fancy_matches:
+        length = sum(len(m) for m in fancy_matches)
+        action_length = len(message) - length
+        if action_length >= min_length:
+            return True
+    quote_matches = ACTION_DOUBLE_QUOTES_RE.findall(message)
+    if quote_matches:
+        length = sum(len(m) for m in quote_matches)
+        action_length = len(message) - length
+        if action_length >= min_length:
+            return True
+    return False

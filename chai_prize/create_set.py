@@ -21,7 +21,8 @@ from chai_prize.util.data import (
     is_single_character,
     is_not_english,
     bot_has_wrong_language,
-    remove_trailing_user_messages
+    remove_trailing_user_messages,
+    has_actions
 )
 from chai_prize.datasets.chai import (
     parse_chai_conversation,
@@ -54,37 +55,9 @@ def bot_has_long_answers(chat, min_chars: int = 150):
     return result > min_chars
 
 
-ACTION_STAR_RE = re.compile(r'\*[^\*]+\*')
-ACTION_FANCY_QUOTES_RE = re.compile(r'“[^”]+”')
-ACTION_DOUBLE_QUOTES_RE = re.compile(r'"[^"]+"')
-
-
 def bot_has_actions(chat, min_fraction: float = 0.85):
     bot_messages = [m["content"] for m in chat if m["role"] == "bot"]
-
-    count_action_messages = 0
-    for message in bot_messages:
-        star_matches = ACTION_STAR_RE.findall(message)
-        if star_matches:
-            length = max(len(m) for m in star_matches)
-            if length >= 7:
-                count_action_messages += 1
-                continue
-        fancy_matches = ACTION_FANCY_QUOTES_RE.findall(message)
-        if fancy_matches:
-            length = sum(len(m) for m in fancy_matches)
-            action_length = len(message) - length
-            if action_length >= 7:
-                count_action_messages += 1
-                continue
-        quote_matches = ACTION_DOUBLE_QUOTES_RE.findall(message)
-        if quote_matches:
-            length = sum(len(m) for m in quote_matches)
-            action_length = len(message) - length
-            if action_length >= 7:
-                count_action_messages += 1
-                continue
-
+    count_action_messages = sum([has_actions(message) for message in bot_messages])
     return count_action_messages >= int(len(bot_messages) * min_fraction)
 
 
