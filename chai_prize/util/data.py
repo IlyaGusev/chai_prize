@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 
 from chai_prize.util.langdetect import detect_language
