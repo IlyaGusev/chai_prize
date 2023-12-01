@@ -32,9 +32,9 @@ from chai_prize.datasets.chai import (
 )
 
 
-ASSISTANT_CHAR_NAME = "Ассистент"
-ASSISTANT_SYSTEM_MESSAGE = "Ассистент даёт полезные, детальные и вежливые ответы на вопрос пользователя"
-ASSISTANT_GREETING = "Приветствую!"
+ASSISTANT_CHAR_NAME = "Assistant"
+ASSISTANT_SYSTEM_MESSAGE = "The assistant gives helpful, detailed, and polite answers to the human's questions."
+ASSISTANT_GREETING = "Hello!"
 
 def calc_user_engagement(messages):
     response_length = [len(m["content"]) for m in messages if m["role"] == "user"]
@@ -742,6 +742,82 @@ def process_oasst(
     return oasst_records
 
 
+FRP1_START = "Generate the next reply in this role-play chat as "
+
+def process_freedomrp(
+    sample_rate: float = 1.0,
+    dataset_name: str = "openerotica/freedom-rp",
+    max_length: int = 20000,
+    min_messages: int = 4,
+    min_action_heuristics_score: float = 0.0,
+    min_user_engagement_heuristics_score: float = 0.0,
+    min_bot_engagement_heuristics_score: float = 0.0,
+    boost_not_english: bool = False,
+    only_same_language: bool = False,
+    **kwargs
+):
+    records = []
+    for row in load_dataset(dataset_name, split="train"):
+        conversation = row["conversations"]
+        if conversation[0]["from"] != "system":
+            continue
+        initial_system_message = conversation[0]["value"]
+        if initial_system_message.startswith(FRP1_START):
+            m = initial_system_message[len(FRP1_START):]
+            char_name = m.split(":")[0]
+            description = ":".join(m.split(":")[1:]).strip()
+        else:
+            continue
+        if char_name in pippa_chars:
+            continue
+        chat = [{
+            "role": "system",
+            "content": description
+        }, {
+            "role": "prompt",
+            "content": ""
+        }]
+        conversation = conversation[1:]
+        if len(conversation) < min_messages:
+            continue
+        mapping = {
+            "system": "system",
+            "gpt": "bot",
+            "human": "user"
+        }
+        for m in conversation:
+            chat.append({
+                "role": mapping[m["from"]],
+                "content": m["value"]
+            })
+        chat = shrink(chat, max_length)
+        if is_bad_chat(chat):
+            continue
+
+        if only_same_language and bot_has_wrong_language(chat):
+            continue
+        if not boost_not_english or not is_not_english(chat):
+            if is_single_character(char_name):
+                if not bot_has_actions(chat, min_action_heuristics_score):
+                    continue
+                if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
+                    continue
+                if calc_bot_engagement(chat) < min_bot_engagement_heuristics_score:
+                    continue
+        if random.random() > sample_rate:
+            continue
+
+        records.append({
+            "messages": chat,
+            "char_name": char_name,
+            "source": "freedom_rp"
+        })
+    print("Freedom RP count:", len(records))
+    if records:
+        print("Freedom RP max length:", calc_max_length(records))
+    return records
+
+
 def main(config_path, output_dir):
     random.seed(42)
     with open(config_path) as r:
@@ -750,23 +826,23 @@ def main(config_path, output_dir):
 
     # AO3
     if "ao3" in config:
-        ao3_records = process_ao3(**config["ao3"])
-        records += ao3_records
+        records += process_ao3(**config["ao3"])
 
     # Bluemoon
     if "bluemoon" in config:
-        bluemoon_records = process_bluemoon(**config["bluemoon"])
-        records += bluemoon_records
+        records += process_bluemoon(**config["bluemoon"])
 
     # LIMA RP
     if "limarp" in config:
-        limarp_records = process_limarp(**config["limarp"])
-        records += limarp_records
+        records += process_limarp(**config["limarp"])
 
     # PIPPA
     if "pippa" in config:
-        pippa_records = process_pippa(**config["pippa"])
-        records += pippa_records
+        records += process_pippa(**config["pippa"])
+
+    # FreedomRP
+    if "freedomrp" in config:
+        records += process_freedomrp(pippa_chars, **config["freedomrp"])
 
     # RPR
     rp_records = []
@@ -782,28 +858,29 @@ def main(config_path, output_dir):
 
     # Chai conversations
     if "chai" in config or "pos" in config:
-        chai_records = process_chai(**config.get("chai", config.get("pos")))
-        records += chai_records
+        records += process_chai(**config.get("chai", config.get("pos")))
 
     # GPTeacher
     if "gpteacher" in config:
-        gpteacher_records = process_gpteacher(**config["gpteacher"])
-        records += gpteacher_records
+        records += process_gpteacher(**config["gpteacher"])
 
+    # Saiga
     if "ru_instruct_gpt4" in config:
-        gpt4_records = process_instruct_gpt4(**config["ru_instruct_gpt4"])
-        records += gpt4_records
+        records += process_instruct_gpt4(**config["ru_instruct_gpt4"])
 
     if "saiga" in config:
-        saiga_records = process_saiga(**config["saiga"])
-        records += saiga_records
+        records += process_saiga(**config["saiga"])
 
     if "oasst" in config:
-        oasst_records = process_oasst(**config["oasst"])
-        records += oasst_records
+        records += process_oasst(**config["oasst"])
 
     # Final processing
     records = [r for r in records if not is_bad_chat(r["messages"])]
+
+    print("Befre undup:", len(records))
+    records = {(r["char_name"], [m for m in r["messages"] if m["role"] == "user"][0]["content"][:30]): r for r in records}
+    records = list(records.values())
+
     print("All count after cleaning:", len(records))
 
     random.shuffle(records)
