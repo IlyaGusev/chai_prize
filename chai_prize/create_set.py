@@ -22,7 +22,8 @@ from chai_prize.util.data import (
     is_not_english,
     bot_has_wrong_language,
     remove_trailing_user_messages,
-    has_actions
+    has_actions,
+    has_ai_ss
 )
 from chai_prize.datasets.chai import (
     parse_chai_conversation,
@@ -30,6 +31,10 @@ from chai_prize.datasets.chai import (
     is_good_feedback
 )
 
+
+ASSISTANT_CHAR_NAME = "Ассистент"
+ASSISTANT_SYSTEM_MESSAGE = "Ассистент даёт полезные, детальные и вежливые ответы на вопрос пользователя"
+ASSISTANT_GREETING = "Приветствую!"
 
 def calc_user_engagement(messages):
     response_length = [len(m["content"]) for m in messages if m["role"] == "user"]
@@ -566,6 +571,8 @@ def process_ao3(
 ):
     records = []
     for row in load_dataset(dataset_name, split="train"):
+        if random.random() > sample_rate:
+            continue
         conversations = row["conversations"]
         chat = [{
             "role": "system",
@@ -596,6 +603,143 @@ def process_ao3(
     if records:
         print("AO3 max length:", calc_max_length(records))
     return records
+
+
+def process_instruct_gpt4(
+    sample_rate: float = 1.0,
+    dataset_name: str = "lksy/ru_instruct_gpt4",
+    max_length: int = 20000,
+    rm_linebreaks: bool = False,
+    **kwargs
+):
+    records = []
+    for row in load_dataset(dataset_name, split="train"):
+        message = row["instruction"]
+        if row["input"]:
+            message += "\nДано: " + row["input"]
+        output = row["full_output"]
+        if not output:
+            continue
+        if has_ai_ss([{"content": output}]):
+            continue
+        if rm_linebreaks:
+            output = " ".join(output.split())
+        chat = [{
+            "role": "system",
+            "content": ASSISTANT_SYSTEM_MESSAGE
+        }, {
+            "role": "prompt",
+            "content": ""
+        }, {
+            "role": "bot",
+            "content": ASSISTANT_GREETING
+        }]
+        chat.append({"role": "user", "content": message})
+        chat.append({"role": "bot", "content": output})
+        chat = shrink(chat, max_length)
+        if is_bad_chat(chat):
+            continue
+        if random.random() > sample_rate:
+            continue
+        records.append({
+            "messages": chat,
+            "char_name": ASSISTANT_CHAR_NAME,
+            "source": "gpt4"
+        })
+    print("GPT4 count:", len(records))
+    if records:
+        print("GPT4 max length:", calc_max_length(records))
+    return records
+
+
+def process_saiga(
+    sample_rate: float = 1.0,
+    dataset_name: str = "IlyaGusev/ru_turbo_saiga",
+    max_length: int = 20000,
+    rm_linebreaks: bool = False,
+    **kwargs
+):
+    records = []
+    for row in load_dataset(dataset_name, split="train"):
+        messages = revert_flattening(row["messages"])
+        if has_ai_ss(messages):
+            continue
+        if row["model_name"] != "gpt-4":
+            continue
+        chat = [{
+            "role": "system",
+            "content": ASSISTANT_SYSTEM_MESSAGE
+        }, {
+            "role": "prompt",
+            "content": ""
+        }, {
+            "role": "bot",
+            "content": ASSISTANT_GREETING
+        }]
+        if rm_linebreaks:
+            for message in messages:
+                if message["role"] == "bot":
+                    message["content"] = " ".join(message["content"].split())
+
+        chat += messages
+        chat = shrink(chat, max_length)
+        if is_bad_chat(chat):
+            continue
+        if random.random() > sample_rate:
+            continue
+        records.append({
+            "messages": chat,
+            "char_name": ASSISTANT_CHAR_NAME,
+            "source": "saiga"
+        })
+    print("Saiga count:", len(records))
+    if records:
+        print("Saiga max length:", calc_max_length(records))
+    return records
+
+
+def process_oasst(
+    sample_rate: float = 1.0,
+    dataset_name: str = "IlyaGusev/oasst1_ru_main_branch",
+    max_length: int = 20000,
+    rm_linebreaks: bool = False,
+    **kwargs
+):
+    oasst_records = []
+    for row in tqdm(load_dataset(dataset_name, split="train")):
+        messages = revert_flattening(row["messages"])
+        if not messages:
+            continue
+        chat = [{
+            "role": "system",
+            "content": ASSISTANT_SYSTEM_MESSAGE
+        }, {
+            "role": "prompt",
+            "content": ""
+        }, {
+            "role": "bot",
+            "content": ASSISTANT_GREETING
+        }]
+        if rm_linebreaks:
+            for message in messages:
+                if message["role"] == "bot":
+                    message["content"] = " ".join(message["content"].split())
+
+        chat += messages
+        chat = shrink(chat, max_length)
+        if is_bad_chat(chat):
+            continue
+        if random.random() > sample_rate:
+            continue
+        oasst_records.append({
+            "messages": chat,
+            "char_name": ASSISTANT_CHAR_NAME,
+            "source": "oasst"
+        })
+    print("OASST count:", len(oasst_records))
+    if oasst_records:
+        print("OASST max length:", calc_max_length(oasst_records))
+    return oasst_records
 
 
 def main(config_path, output_dir):
@@ -645,6 +789,18 @@ def main(config_path, output_dir):
     if "gpteacher" in config:
         gpteacher_records = process_gpteacher(**config["gpteacher"])
         records += gpteacher_records
+
+    if "ru_instruct_gpt4" in config:
+        gpt4_records = process_instruct_gpt4(**config["ru_instruct_gpt4"])
+        records += gpt4_records
+
+    if "saiga" in config:
+        saiga_records = process_saiga(**config["saiga"])
+        records += saiga_records
+
+    if "oasst" in config:
+        oasst_records = process_oasst(**config["oasst"])
+        records += oasst_records
 
     # Final processing
     records = [r for r in records if not is_bad_chat(r["messages"])]

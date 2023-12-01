@@ -48,7 +48,7 @@ def fix_tokenizer(tokenizer, model_config):
         candidates = (
             model_config.pad_token_id,
             guessed_pad_token_id,
-            tokenizer.unk_token_id
+            tokenizer.unk_token_id,
         )
         token_id, token = _check_candidates(candidates, bad_ids, tokenizer, "<pad>")
         tokenizer.pad_token_id = token_id

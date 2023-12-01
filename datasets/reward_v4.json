@@ -4,7 +4,7 @@
         "sample_rate": 1.0,
         "max_length": 20000,
         "only_whitelist": false,
-        "min_messages": 6,
+        "min_messages": 3,
         "dataset_name": "IlyaGusev/20231007_chai_prize_model_feedback_all",
         "character_dataset_name": "IlyaGusev/season_iii_chat_ai_configurations"
     },

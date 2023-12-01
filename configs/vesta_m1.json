@@ -27,6 +27,6 @@
     "only_target_loss": true,
     "add_global_eos": false,
     "templates_path": "prompts/prompt_v3.json",
-    "model_name": "models/openchat_3.5",
+    "model_name": "models/Nous-Hermes-Llama2-13b",
     "max_tokens_count": 2560
 }
