@@ -63,7 +63,7 @@ def clean_bot_message(text):
         text = text.replace(old, new)
     text = normalize_whitespaces(text)
     text = remove_quotes(text)
-    text = text.replace("\*", "*")
+    text = text.replace(r"\*", "*")
     return text
 
 
@@ -286,6 +286,7 @@ def has_ai_ss(messages):
             return True
     return False
 
+
 ACTION_STAR_RE = re.compile(r'\*[^\*]+\*')
 ACTION_FANCY_QUOTES_RE = re.compile(r'“[^”]+”')
 ACTION_DOUBLE_QUOTES_RE = re.compile(r'"[^"]+"')
@@ -310,3 +311,19 @@ def has_actions(message, min_length: int = 7):
         if action_length >= min_length:
             return True
     return False
+
+
+def remove_actions(message, min_length: int = 7):
+    orig_message = message
+    star_matches = ACTION_STAR_RE.findall(message)
+    if star_matches:
+        for m in star_matches:
+            message = message.replace(m, " ")
+    quote_matches = ACTION_DOUBLE_QUOTES_RE.findall(message)
+    if quote_matches:
+        for m in quote_matches:
+            message = message.replace(m, " ")
+    if message == orig_message:
+        return None
+    message = " ".join(message.split())
+    return message

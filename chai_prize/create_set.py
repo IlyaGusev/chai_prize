@@ -1,5 +1,4 @@
 import os
-import re
 import json
 import copy
 import random
@@ -36,6 +35,7 @@ ASSISTANT_CHAR_NAME = "Assistant"
 ASSISTANT_SYSTEM_MESSAGE = "The assistant gives helpful, detailed, and polite answers to the human's questions."
 ASSISTANT_GREETING = "Hello!"
 
+
 def calc_user_engagement(messages):
     response_length = [len(m["content"]) for m in messages if m["role"] == "user"]
     if len(response_length) <= 1:
@@ -60,9 +60,9 @@ def bot_has_long_answers(chat, min_chars: int = 150):
     return result > min_chars
 
 
-def bot_has_actions(chat, min_fraction: float = 0.85):
+def bot_has_actions(chat, min_fraction: float = 0.85, min_action_length: int = 7):
     bot_messages = [m["content"] for m in chat if m["role"] == "bot"]
-    count_action_messages = sum([has_actions(message) for message in bot_messages])
+    count_action_messages = sum([has_actions(message, min_action_length) for message in bot_messages])
     return count_action_messages >= int(len(bot_messages) * min_fraction)
 
 
@@ -210,7 +210,8 @@ def process_chai(
     boost_not_english: bool = False,
     only_same_language: bool = False,
     exclude_last_message: bool = False,
-    max_char_chats: Optional[int] = None
+    max_char_chats: Optional[int] = None,
+    min_action_length: int = 7
 ):
     records = []
     ctrl_counts = Counter()
@@ -272,7 +273,7 @@ def process_chai(
 
         if not boost_not_english or not is_not_english(chat):
             if is_single_character(char_name):
-                if not bot_has_actions(chat, min_action_heuristics_score):
+                if not bot_has_actions(chat, min_action_heuristics_score, min_action_length):
                     continue
                 if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
                     continue
@@ -328,7 +329,8 @@ def process_pippa(
     min_bot_engagement_heuristics_score: float = 0.0,
     boost_not_english: bool = False,
     only_same_language: bool = False,
-    max_char_chats: Optional[int] = None
+    max_char_chats: Optional[int] = None,
+    min_action_length: int = 7
 ):
     records = []
 
@@ -386,7 +388,7 @@ def process_pippa(
 
         if not boost_not_english or not is_not_english(chat):
             if is_single_character(char_name):
-                if not bot_has_actions(chat, min_action_heuristics_score):
+                if not bot_has_actions(chat, min_action_heuristics_score, min_action_length):
                     continue
                 if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
                     continue
@@ -744,6 +746,7 @@ def process_oasst(
 
 FRP1_START = "Generate the next reply in this role-play chat as "
 
+
 def process_freedomrp(
     sample_rate: float = 1.0,
     dataset_name: str = "openerotica/freedom-rp",
@@ -754,6 +757,7 @@ def process_freedomrp(
     min_bot_engagement_heuristics_score: float = 0.0,
     boost_not_english: bool = False,
     only_same_language: bool = False,
+    min_action_length: int = 7,
     **kwargs
 ):
     records = []
@@ -767,8 +771,6 @@ def process_freedomrp(
             char_name = m.split(":")[0]
             description = ":".join(m.split(":")[1:]).strip()
         else:
-            continue
-        if char_name in pippa_chars:
             continue
         chat = [{
             "role": "system",
@@ -798,7 +800,7 @@ def process_freedomrp(
             continue
         if not boost_not_english or not is_not_english(chat):
             if is_single_character(char_name):
-                if not bot_has_actions(chat, min_action_heuristics_score):
+                if not bot_has_actions(chat, min_action_heuristics_score, min_action_length):
                     continue
                 if calc_user_engagement(chat) < min_user_engagement_heuristics_score:
                     continue
@@ -842,7 +844,7 @@ def main(config_path, output_dir):
 
     # FreedomRP
     if "freedomrp" in config:
-        records += process_freedomrp(pippa_chars, **config["freedomrp"])
+        records += process_freedomrp(**config["freedomrp"])
 
     # RPR
     rp_records = []
@@ -878,7 +880,10 @@ def main(config_path, output_dir):
     records = [r for r in records if not is_bad_chat(r["messages"])]
 
     print("Befre undup:", len(records))
-    records = {(r["char_name"], [m for m in r["messages"] if m["role"] == "user"][0]["content"][:30]): r for r in records}
+    records = {
+        (r["char_name"], [m for m in r["messages"] if m["role"] == "user"][0]["content"][:30]):
+        r for r in records
+    }
     records = list(records.values())
 
     print("All count after cleaning:", len(records))

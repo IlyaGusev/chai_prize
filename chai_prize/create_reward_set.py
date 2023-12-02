@@ -17,7 +17,9 @@ from chai_prize.util.data import (
     is_bad_chat,
     has_repetition,
     remove_trailing_user_messages,
-    bot_has_wrong_language
+    bot_has_wrong_language,
+    has_actions,
+    remove_actions
 )
 from chai_prize.datasets.chai import (
     parse_chai_conversation,
@@ -226,17 +228,27 @@ def main(config_path, output_dir):
             negative_records = []
             for r in records:
                 assert r["messages"][-1]["role"] == "bot", r["messages"][-1]["role"]
+                last_message = r["messages"][-1]["content"]
                 is_thumbs_up = r["original_fields"]["thumbs_up"]
                 is_repeating = has_repetition(r["messages"][-4:], prefix_length=30)
-                has_wrong_language = bot_has_wrong_language(r["messages"])
+                has_wrong_language = bot_has_wrong_language(r["messages"][-4:])
                 if has_wrong_language:
-                    negative_records.append(r)
                     continue
                 if is_repeating:
                     negative_records.append(r)
                     continue
                 if is_thumbs_up:
+                    pos_only_with_actions = config.get("pos_only_with_actions", False)
+                    if pos_only_with_actions and not has_actions(last_message):
+                        continue
+                    pos_min_last_message_length = config.get("pos_min_last_message_length", None)
+                    if pos_min_last_message_length and len(last_message) < pos_min_last_message_length:
+                        continue
                     positive_records.append(r)
+                    continue
+
+                neg_max_last_message_length = config.get("neg_max_last_message_length", None)
+                if neg_max_last_message_length and len(last_message) > neg_max_last_message_length:
                     continue
                 negative_records.append(r)
 
@@ -246,12 +258,7 @@ def main(config_path, output_dir):
             random.shuffle(negative_records)
             char_name = positive_records[0]["char_name"]
 
-            for pos_record, neg_record in zip(positive_records, negative_records):
-                final_records.append({
-                    "chosen_messages": pos_record["messages"],
-                    "rejected_messages": neg_record["messages"],
-                    "char_name": char_name
-                })
+            aug_negative_records = []
             for pos_record in positive_records:
                 messages = pos_record["messages"]
                 if len(messages) >= 7 and random.random() < config.get("aug_swap_prob", 0.0):
@@ -259,18 +266,18 @@ def main(config_path, output_dir):
                     bot_message_indices = [i for i, m in enumerate(messages) if m["role"] == "bot"][:-1]
                     swap_index = random.choice(bot_message_indices)
                     neg_messages[-1], neg_messages[swap_index] = messages[swap_index], messages[-1]
-                    final_records.append({
-                        "chosen_messages": messages[:],
-                        "rejected_messages": neg_messages,
+                    aug_negative_records.append({
+                        "orig_messages": messages[:],
+                        "messages": neg_messages,
                         "char_name": char_name,
                         "aug": "swap"
                     })
                 if random.random() < config.get("aug_empty_prob", 0.0):
                     neg_messages = copy.deepcopy(messages)
                     neg_messages[-1]["content"] = ""
-                    final_records.append({
-                        "chosen_messages": messages[:],
-                        "rejected_messages": neg_messages,
+                    aug_negative_records.append({
+                        "orig_messages": messages[:],
+                        "messages": neg_messages,
                         "char_name": char_name,
                         "aug": "empty"
                     })
@@ -282,9 +289,9 @@ def main(config_path, output_dir):
                     new_content = " ".join(words)
                     if new_content != content:
                         neg_messages[-1]["content"] = new_content
-                    final_records.append({
-                        "chosen_messages": messages[:],
-                        "rejected_messages": neg_messages,
+                    aug_negative_records.append({
+                        "orig_messages": messages[:],
+                        "messages": neg_messages,
                         "char_name": char_name,
                         "aug": "shuffle"
                     })
@@ -293,24 +300,57 @@ def main(config_path, output_dir):
                     prev_bot_message = [m for i, m in enumerate(messages) if m["role"] == "bot"][-2]
                     assert messages[-1]["role"] == "bot"
                     neg_messages[-1]["content"] = prev_bot_message["content"]
-                    final_records.append({
-                        "chosen_messages": messages[:],
-                        "rejected_messages": neg_messages,
+                    aug_negative_records.append({
+                        "orig_messages": messages[:],
+                        "messages": neg_messages,
                         "char_name": char_name,
                         "aug": "repeat"
                     })
+                if random.random() < config.get("aug_rm_actions", 0.0):
+                    neg_messages = copy.deepcopy(messages)
+                    last_message = neg_messages[-1]["content"]
+                    if has_actions(last_message):
+                        fixed_message = remove_actions(last_message)
+                        if fixed_message:
+                            neg_messages[-1]["content"] = fixed_message
+                            aug_negative_records.append({
+                                "orig_messages": messages[:],
+                                "messages": neg_messages,
+                                "char_name": char_name,
+                                "aug": "rm_actions"
+                            })
 
-    if "thumbs_up_pointwise" in modes:
-        for conv_id, record in enumerate(chai_records):
-            messages = [m for m in record["messages"] if not m.get("is_deleted", False)]
-            if not messages:
-                continue
-            final_records.append({
-                "messages": messages,
-                "target": int(record["original_fields"]["thumbs_up"]),
-                "char_name": record["char_name"],
-                "conv_id": conv_id
-            })
+            make_pairwise = config.get("make_pairwise", False)
+
+            if make_pairwise:
+                for pos_record, neg_record in zip(positive_records, negative_records):
+                    final_records.append({
+                        "chosen_messages": pos_record["messages"],
+                        "rejected_messages": neg_record["messages"],
+                        "char_name": char_name
+                    })
+                for record in aug_negative_records:
+                    final_records.append({
+                        "chosen_messages": record["orig_messages"],
+                        "rejected_messages": record["messages"],
+                        "char_name": char_name,
+                        "aug": record["aug"]
+                    })
+            else:
+                for pos_record in positive_records:
+                    final_records.append({
+                        "messages": pos_record["messages"],
+                        "target": 1,
+                        "char_name": char_name,
+                    })
+                for neg_record in negative_records + aug_negative_records:
+                    final_records.append({
+                        "messages": neg_record["messages"],
+                        "target": 0,
+                        "char_name": char_name,
+                    })
+
+    random.shuffle(final_records)
     print("All count after cleaning:", len(final_records))
 
     char_names = list({r["char_name"] for r in final_records})

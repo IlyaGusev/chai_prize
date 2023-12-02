@@ -5,7 +5,6 @@ from datetime import datetime
 import fire
 import wandb
 import chai_guanaco as chai
-from tqdm import tqdm
 from chai_guanaco.metrics import FeedbackMetrics
 from chai_guanaco.login_cli import auto_authenticate
 from chai_guanaco.feedback import _get_latest_feedback
