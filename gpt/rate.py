@@ -23,9 +23,8 @@ def encode_prompt(record, template_path, exclude_system: bool = False):
             message["role"] = "User"
         elif message["role"] == "bot":
             message["role"] = record["char_name"]
-        message["content"] = " ".join(message["content"].split("\n"))
         filtered_messages.append(message)
-    fixed_record["messages"] = filtered_messages
+    fixed_record["messages"] = filtered_messages[:30]
     return template.render(task=fixed_record).strip() + "\n"
 
 
@@ -36,14 +35,6 @@ def parse_output(output):
     text = text.strip()
     record = json.loads(text)
     return record
-
-
-def get_first_user_message(record):
-    for message in record["messages"]:
-        if message["role"] == "user":
-            content = message["content"]
-            content = " ".join(content.split()).strip()
-            return content
 
 
 def process_batch(batch, model_name, template_path, output_key, exclude_system):
@@ -76,7 +67,7 @@ def process_batch(batch, model_name, template_path, output_key, exclude_system):
 
 
 def get_pippa_key(record):
-    return (record["submission_timestamp"], record["bot_id"], get_first_user_message(record))
+    return hash("".join(m["content"] for m in record["messages"]))
 
 
 def get_chai_key(record):
@@ -88,7 +79,7 @@ def main(
     output_path: str,
     template_path: str,
     model_name: str = "gpt-4",
-    request_batch_size: int = 2,
+    request_batch_size: int = 1,
     dataset_name: str = "pippa",
     output_key: str = "parsed_output",
     exclude_system: bool = False

@@ -342,6 +342,9 @@ def process_pippa(
         context = row["bot_description"]
         char_name = row["bot_name"].strip()
         messages = revert_flattening(row["conversation"])
+        if row.get("gpt_35_turbo_result") != "ok":
+            continue
+
         if len(messages) < min_messages:
             continue
 
@@ -415,13 +418,15 @@ def process_pippa(
             row_counts = add_ctrl_attributes(chat, row)
             ctrl_counts += row_counts
 
-        timestamp = int(row.pop("submission_timestamp").timestamp())
+        timestamp = None
+        if "submission_timestamp" in row:
+            timestamp = int(row.pop("submission_timestamp").timestamp())
         records.append({
             "messages": chat,
             "char_name": char_name,
-            "bot_id": row["bot_id"],
+            "bot_id": row.get("bot_id", None),
             "submission_timestamp": timestamp,
-            "categories": row["categories"],
+            "categories": row.get("categories", None),
             "original_fields": row,
             "source": "pippa"
         })
@@ -880,11 +885,13 @@ def main(config_path, output_dir):
     records = [r for r in records if not is_bad_chat(r["messages"])]
 
     print("Befre undup:", len(records))
-    records = {
-        (r["char_name"], [m for m in r["messages"] if m["role"] == "user"][0]["content"][:30]):
-        r for r in records
-    }
-    records = list(records.values())
+
+    new_records = {}
+    for r in records:
+        user_messages = [m for m in r["messages"] if m["role"] == "user"]
+        first_user_message = user_messages[0]["content"][:30]
+        new_records[(r["char_name"], first_user_message)] = r
+    records = list(new_records.values())
 
     print("All count after cleaning:", len(records))
 
