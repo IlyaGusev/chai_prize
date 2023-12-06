@@ -26,88 +26,7 @@ from chai_prize.datasets.chai import (
     is_whitelisted_model,
     is_good_feedback
 )
-
-
-def process_chai(
-    sample_rate: float = 1.0,
-    dataset_name: str = "ChaiML/20231007_chai_prize_model_feedback_all",
-    character_dataset_name: str = "ChaiML/seasonIII_chatAI_configurations",
-    max_length: int = 20000,
-    min_messages: int = 6,
-    only_whitelist: bool = False,
-    only_thumbs_up: bool = False,
-    only_good_feedback: bool = False
-):
-    records = []
-    characters = {row["bot_id"]: row for row in load_dataset(character_dataset_name, split="train")}
-    for row in tqdm(load_dataset(dataset_name, split="train")):
-        bot_id = row["bot_id"]
-
-        if bot_id not in characters:
-            continue
-
-        text = row["conversation"]
-        if "INST" in text or "START" in text:
-            continue
-
-        char_name = text.split(":")[0].strip()
-        chat = list(parse_chai_conversation(text))
-        if not chat:
-            continue
-
-        if only_thumbs_up and not row["thumbs_up"]:
-            continue
-
-        if only_good_feedback and not is_good_feedback(row["feedback"]):
-            continue
-
-        if only_whitelist and not is_whitelisted_model(row["model_name"]):
-            continue
-
-        if not has_bot_message(chat):
-            continue
-
-        if len(chat) < min_messages:
-            continue
-
-        if not has_correct_roles(chat):
-            continue
-
-        if random.random() > sample_rate:
-            continue
-
-        character = characters[bot_id]
-
-        memory = character["memory"]
-        memory = memory if memory else ""
-        memory = memory.strip()
-
-        prompt = character["prompt"]
-        prompt = prompt if prompt else ""
-        prompt = prompt.strip()
-
-        system_chat = [{"role": "system", "content": memory}, {"role": "prompt", "content": prompt}]
-        chat = system_chat + chat
-        shrinked_chat = shrink(chat, max_length)
-        is_shrinked = len(shrinked_chat) < len(chat)
-        chat = shrinked_chat
-        remove_trailing_user_messages(chat)
-        if len(chat) < 5:
-            continue
-
-        records.append({
-            "messages": chat,
-            "char_name": char_name,
-            "original_fields": row,
-            "source": "chai",
-            "is_shrinked": is_shrinked,
-            "bot_id": bot_id
-        })
-
-    print("From Chai count:", len(records))
-    if records:
-        print("Chai max length:", calc_max_length(records))
-    return records
+from chai_prize.create_set import process_chai
 
 
 def process_arena(
@@ -221,7 +140,7 @@ def main(config_path, output_dir):
         char_records = defaultdict(list)
         for record in chai_records:
             record["messages"] = [m for m in record["messages"] if not m.get("is_deleted", False)]
-            char_records[record["bot_id"]].append(record)
+            char_records[record["char_name"]].append(record)
 
         for _, records in char_records.items():
             positive_records = []
@@ -229,11 +148,14 @@ def main(config_path, output_dir):
             for r in records:
                 assert r["messages"][-1]["role"] == "bot", r["messages"][-1]["role"]
                 last_message = r["messages"][-1]["content"]
-                is_thumbs_up = r["original_fields"]["thumbs_up"]
+                orig_fields = r["original_fields"]
+                is_thumbs_up = orig_fields.get("thumbs_up", orig_fields.get("labels"))
                 is_repeating = has_repetition(r["messages"][-4:], prefix_length=30)
-                has_wrong_language = bot_has_wrong_language(r["messages"][-4:])
-                if has_wrong_language:
-                    continue
+                last_messages = r["messages"][3:][-4:]
+                if len(last_messages) == 4:
+                    has_wrong_language = bot_has_wrong_language(last_messages)
+                    if has_wrong_language and is_thumbs_up:
+                        continue
                 if is_repeating:
                     negative_records.append(r)
                     continue

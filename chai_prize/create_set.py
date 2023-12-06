@@ -216,20 +216,35 @@ def process_chai(
     records = []
     ctrl_counts = Counter()
     char_counts = Counter()
-    characters = {row["bot_id"]: row for row in load_dataset(character_dataset_name, split="train")}
+
+    characters = {}
+    for row in load_dataset(character_dataset_name, split="train"):
+        characters[row["bot_id"]] = row
+        characters[row["bot_label"].strip()] = row
+
     for row in tqdm(load_dataset(dataset_name, split="train")):
-        # Join
-        bot_id = row["bot_id"]
-        if bot_id not in characters:
+        text = row.get("conversation", row.get("input_text"))
+        if not text:
             continue
-        character = characters[bot_id]
+        char_name = text.split(":")[0].strip()
+        if "'s Persona" in char_name:
+            char_name = char_name.split("'s Persona")[0].strip()
+
+        # Join
+        bot_id = row.get("bot_id", None)
+        if bot_id:
+            if bot_id not in characters:
+                continue
+            character = characters[bot_id]
+        else:
+            if char_name not in characters:
+                continue
+            character = characters[char_name]
 
         # Parse conversations
-        text = row["conversation"]
-        if "INST" in text or "START" in text:
+        if "'s Persona" not in text and ("INST" in text or "START" in text):
             continue
 
-        char_name = text.split(":")[0].strip()
         chat = list(parse_chai_conversation(text))
         chat = [{"role": m["role"], "content": m["content"]} for m in chat if not m["is_deleted"]]
         remove_trailing_user_messages(chat)
@@ -262,7 +277,7 @@ def process_chai(
         if is_bad_chat(chat):
             continue
 
-        if only_thumbs_up and not row["thumbs_up"]:
+        if only_thumbs_up and not row.get("thumbs_up", row.get("labels")):
             continue
 
         if only_whitelist and not is_whitelisted_model(row["model_name"]):
@@ -342,7 +357,7 @@ def process_pippa(
         context = row["bot_description"]
         char_name = row["bot_name"].strip()
         messages = revert_flattening(row["conversation"])
-        if row.get("gpt_35_turbo_result") != "ok":
+        if row.get("gpt_35_turbo_result", "ok") != "ok":
             continue
 
         if len(messages) < min_messages:
@@ -825,11 +840,41 @@ def process_freedomrp(
     return records
 
 
+def process_anychars(
+    sample_rate: float = 1.0,
+    dataset_name: str = "IlyaGusev/anychars",
+    max_length: int = 20000,
+    **kwargs
+):
+    records = []
+    for row in load_dataset(dataset_name, split="train"):
+        chat = revert_flattening(row["messages"])
+        chat = shrink(chat, max_length)
+        if is_bad_chat(chat):
+            continue
+        if random.random() > sample_rate:
+            continue
+        records.append({
+            "messages": chat,
+            "char_name": row["char_name"],
+            "source": "anychars"
+        })
+    print("Anychars count:", len(records))
+    if records:
+        print("Anychars max length:", calc_max_length(records))
+    return records
+
+
+
 def main(config_path, output_dir):
     random.seed(42)
     with open(config_path) as r:
         config = json.load(r)
     records = []
+
+    # Anychars
+    if "anychars" in config:
+        records += process_anychars(**config["anychars"])
 
     # AO3
     if "ao3" in config:
@@ -884,11 +929,13 @@ def main(config_path, output_dir):
     # Final processing
     records = [r for r in records if not is_bad_chat(r["messages"])]
 
-    print("Befre undup:", len(records))
+    print("Before undup:", len(records))
 
     new_records = {}
     for r in records:
         user_messages = [m for m in r["messages"] if m["role"] == "user"]
+        if not user_messages:
+            continue
         first_user_message = user_messages[0]["content"][:30]
         new_records[(r["char_name"], first_user_message)] = r
     records = list(new_records.values())

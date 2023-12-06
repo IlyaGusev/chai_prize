@@ -1,7 +1,21 @@
 def parse_chai_conversation(text):
     text = text.strip()
-    char_name = text.split(":")[0].strip()
-    user_name = "Anonymous user"
+
+    if "'s Persona" in text[:100]:
+        parts = text.split("'s Persona")
+        char_name = parts[0].strip()
+        text = parts[1].strip()
+
+        parts = text.split("####")
+        system_message = parts[0].strip()
+        text = parts[1].strip()
+
+        if "<START>" in text:
+            parts = text.split("<START>")
+            prompt_message = parts[0].strip()
+            text = parts[1].strip()
+    else:
+        char_name = text.split(":")[0].strip()
 
     lines = []
     role = "bot"
@@ -9,13 +23,14 @@ def parse_chai_conversation(text):
 
     deleted_start = f"{char_name} (deleted):"
     char_start = f"{char_name}:"
-    user_start = f"{user_name}:"
+    user_start1 = "Anonymous user:"
+    user_start2 = "You:"
 
     for line in text.split("\n"):
         line = line.strip()
 
         current_start = None
-        for start in (deleted_start, char_start, user_start):
+        for start in (deleted_start, char_start, user_start1, user_start2):
             if line.startswith(start):
                 current_start = start
 
@@ -27,7 +42,7 @@ def parse_chai_conversation(text):
             yield {"role": role, "content": "\n".join(lines).strip(), "is_deleted": is_deleted}
 
         lines = [line.replace(current_start, "").strip()]
-        role = "bot" if current_start != user_start else "user"
+        role = "bot" if current_start not in (user_start1, user_start2) else "user"
         is_deleted = current_start == deleted_start
 
     if lines:

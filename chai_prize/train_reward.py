@@ -127,6 +127,15 @@ class ChatRewardDataset(Dataset):
         first_message = first_message[first_message_index:]
         messages[2] = (first_message, first_role)
 
+        prob = random.random()
+
+        if prob < 0.1:
+            messages = messages[1:]
+        elif prob < 0.2:
+            messages = messages[2:]
+        elif prob < 0.3:
+            messages = messages[3:]
+
         full_text = "".join([m for m, _ in messages])
         input_ids = self.get_tokens(full_text)
 
