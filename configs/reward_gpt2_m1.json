@@ -17,6 +17,7 @@
         "optim": "adamw_torch"
     },
     "load_in_8bit": false,
+    "use_flash_attention": false,
     "templates_path": "prompts/prompt_v3.json",
     "model_name": "gpt2",
     "max_tokens_count": 1024

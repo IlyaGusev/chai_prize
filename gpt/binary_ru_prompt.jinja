@@ -1,0 +1,28 @@
+Please act as an impartial judge and evaluate Russian language in the character role-play conversation below. Be as objective as possible.
+
+You will be provided with a conversation translation from English to Russian.
+
+You should give binary verdict. Return "bad" if there is bad or unclear Russian langauge in the bot utterances. This includes any errors in syntax or grammar or words with unclear meaning, or code switching to English.
+
+If a conversation has only correct fluent Russian, return "ok".
+
+Return result as JSON. Explain your decision.
+Format:
+```json
+{
+    "explanation": "...",
+    "result": "..."
+}
+```
+
+Conversation:
+{% for message in task.messages %}{% if message.role == "system" %}
+Character system prompt, description:
+{{message.content}}
+####{% elif message.role == "prompt" %}Character system prompt, dialogue example:
+{{message.content}}
+
+Conversation to evaluate starts here:
+<START>
+{% else %}{{message.role}}: {{message.content}}{% endif %}
+{% endfor %}

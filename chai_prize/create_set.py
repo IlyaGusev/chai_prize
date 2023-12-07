@@ -230,21 +230,7 @@ def process_chai(
         if "'s Persona" in char_name:
             char_name = char_name.split("'s Persona")[0].strip()
 
-        # Join
-        bot_id = row.get("bot_id", None)
-        if bot_id:
-            if bot_id not in characters:
-                continue
-            character = characters[bot_id]
-        else:
-            if char_name not in characters:
-                continue
-            character = characters[char_name]
-
         # Parse conversations
-        if "'s Persona" not in text and ("INST" in text or "START" in text):
-            continue
-
         chat = list(parse_chai_conversation(text))
         chat = [{"role": m["role"], "content": m["content"]} for m in chat if not m["is_deleted"]]
         remove_trailing_user_messages(chat)
@@ -253,25 +239,38 @@ def process_chai(
         if exclude_last_message:
             chat.pop()
         remove_trailing_user_messages(chat)
-        if len(chat) < min_messages:
-            continue
 
+        has_system = len(chat) > 2 and chat[0]["role"] == "system"
+        if len(chat) < min_messages + int(has_system):
+            continue
         for message in chat:
             content = message["content"]
-            content = content if message["role"] == "user" else clean_bot_message(content)
+            content = clean_bot_message(content) if message["role"] == "bot" else content
             message["content"] = content
 
-        memory = character["memory"]
-        memory = memory if memory else ""
-        memory = memory.strip()
+        # Join
+        if not has_system:
+            bot_id = row.get("bot_id", None)
+            if bot_id:
+                if bot_id not in characters:
+                    continue
+                character = characters[bot_id]
+            else:
+                if char_name not in characters:
+                    continue
+                character = characters[char_name]
 
-        prompt = character["prompt"]
-        prompt = prompt if prompt else ""
-        prompt = prompt.strip()
+            memory = character["memory"]
+            memory = memory if memory else ""
+            memory = memory.strip()
 
-        system_chat = [{"role": "system", "content": memory}, {"role": "prompt", "content": prompt}]
-        chat = system_chat + chat
-        chat = shrink(chat, max_length)
+            prompt = character["prompt"]
+            prompt = prompt if prompt else ""
+            prompt = prompt.strip()
+
+            system_chat = [{"role": "system", "content": memory}, {"role": "prompt", "content": prompt}]
+            chat = system_chat + chat
+            chat = shrink(chat, max_length)
 
         # Filter
         if is_bad_chat(chat):
@@ -509,6 +508,7 @@ def process_limarp(
                 current_chat = shrink(current_chat, max_length)
                 if add_ctrl:
                     add_ctrl_attributes(current_chat, row)
+                remove_trailing_user_messages(current_chat)
                 records.append({
                     "messages": current_chat,
                     "char_name": current_char_name.strip(),

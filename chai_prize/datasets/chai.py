@@ -1,19 +1,22 @@
 def parse_chai_conversation(text):
     text = text.strip()
 
-    if "'s Persona" in text[:100]:
-        parts = text.split("'s Persona")
+    if "'s Persona" in text[:200]:
+        parts = text.split("'s Persona:")
         char_name = parts[0].strip()
         text = parts[1].strip()
 
-        parts = text.split("####")
-        system_message = parts[0].strip()
-        text = parts[1].strip()
-
-        if "<START>" in text:
-            parts = text.split("<START>")
-            prompt_message = parts[0].strip()
+        if "####" in text:
+            parts = text.split("####")
+            system_message = parts[0].strip()
             text = parts[1].strip()
+            yield {"role": "system", "content": system_message, "is_deleted": False}
+
+            if "<START>" in text:
+                parts = text.split("<START>")
+                prompt_message = parts[0].strip()
+                text = parts[1].strip()
+                yield {"role": "prompt", "content": prompt_message, "is_deleted": False}
     else:
         char_name = text.split(":")[0].strip()
 

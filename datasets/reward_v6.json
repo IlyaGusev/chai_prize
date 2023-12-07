@@ -1,0 +1,20 @@
+{
+    "modes": ["thumbs_up"],
+    "chai": {
+        "sample_rate": 1.0,
+        "max_length": 10000,
+        "only_whitelist": false,
+        "min_messages": 3,
+        "dataset_name": "IlyaGusev/20231007_chai_prize_model_feedback_all",
+        "character_dataset_name": "IlyaGusev/season_iii_chat_ai_configurations"
+    },
+    "make_pairwise": true,
+    "aug_swap_prob": 0.3,
+    "aug_repeat_prob": 0.01,
+    "aug_empty_prob": 0.001,
+    "aug_shuffle_prob": 0.01,
+    "aug_rm_actions": 0.0,
+    "pos_only_with_actions": true,
+    "pos_min_last_message_length": 170,
+    "neg_max_last_message_length": 170
+}

@@ -1,0 +1,26 @@
+{
+    "trainer": {
+        "evaluation_strategy": "steps",
+        "per_device_train_batch_size": 2,
+        "per_device_eval_batch_size": 2,
+        "gradient_accumulation_steps": 32,
+        "eval_steps": 32,
+        "save_steps": 32,
+        "logging_steps": 1,
+        "learning_rate": 0.0003,
+        "num_train_epochs": 2,
+        "lr_scheduler_type": "cosine",
+        "warmup_steps": 32,
+        "fp16": false,
+        "bf16": true,
+        "torch_compile": false,
+        "gradient_checkpointing": false,
+        "optim": "adamw_torch",
+        "weight_decay": 0.01,
+        "max_grad_norm": 10.0
+    },
+    "load_in_8bit": false,
+    "templates_path": "prompts/prompt_v3.json",
+    "model_name": "TinyLlama/TinyLlama-1.1B-Chat-v0.6",
+    "max_tokens_count": 512
+}
