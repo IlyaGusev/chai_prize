@@ -144,6 +144,7 @@ def train(
     only_target_loss = config.get("only_target_loss", True)
     max_tokens_count = config["max_tokens_count"]
 
+    max_examples_per_record = config.get("max_examples_per_record", 100)
     datasets = []
     for records in (train_records, val_records):
         datasets.append(ChatDataset(
@@ -151,7 +152,8 @@ def train(
             tokenizer,
             max_tokens_count=max_tokens_count,
             templates_path=templates_path,
-            only_target_loss=only_target_loss
+            only_target_loss=only_target_loss,
+            max_examples_per_record=max_examples_per_record,
         ))
     train_dataset, val_dataset = datasets
     data_collator = DataCollatorForTokenClassification(tokenizer)
