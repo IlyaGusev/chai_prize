@@ -18,7 +18,7 @@ class ChatDataset(Dataset):
         templates_path: str,
         only_target_loss: bool = True,
         labels_pad_token_id: int = -100,
-        max_examples_per_record: int = 3
+        max_examples_per_record: int = 1
     ):
         self.templates_path = templates_path
         self.original_records = original_records
@@ -88,7 +88,6 @@ class ChatDataset(Dataset):
                     prev_idx = idx + tokens_count
                     message_found = True
                     break
-            assert message_found
         assert labels != input_ids
         assert any(l != self.labels_pad_token_id for l in labels)
         assert labels[-1] != self.labels_pad_token_id
@@ -146,6 +145,7 @@ class ChatDataset(Dataset):
         conv_text = ""
         new_text = ""
         bot_messages = list()
+        last_prev_bot_message = None
         for message_num, (message, role) in enumerate(all_messages[2:]):
             if role == Conversation.USER_ROLE:
                 new_text = conv_text + message
@@ -156,7 +156,9 @@ class ChatDataset(Dataset):
             if new_tokens_count < allowed_conv_tokens_count:
                 conv_text = new_text
             else:
-                if bot_messages:
+                is_scrolled = last_prev_bot_message is None or last_prev_bot_message not in conv_text
+                if is_scrolled and bot_messages:
+                    last_prev_bot_message = bot_messages[-1]
                     yield self.process_conv(system_text + conv_text, bot_messages, system_tokens_count)
                     bot_messages.clear()
 
@@ -169,5 +171,6 @@ class ChatDataset(Dataset):
             if message_num != 0:
                 bot_messages.append(message)
 
-        if bot_messages:
+        is_scrolled = last_prev_bot_message is None or last_prev_bot_message not in conv_text
+        if is_scrolled and bot_messages:
             yield self.process_conv(system_text + conv_text, bot_messages, system_tokens_count)

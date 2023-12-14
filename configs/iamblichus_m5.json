@@ -10,7 +10,7 @@
         "learning_rate": 0.0003,
         "num_train_epochs": 3,
         "lr_scheduler_type": "cosine",
-        "warmup_steps": 20,
+        "warmup_steps": 10,
         "fp16": false,
         "bf16": true,
         "optim": "adamw_torch"
@@ -26,8 +26,8 @@
     "load_in_8bit": true,
     "only_target_loss": true,
     "add_global_eos": false,
-    "max_examples_per_record": 2,
+    "max_examples_per_record": 3,
     "templates_path": "prompts/prompt_v3.json",
-    "model_name": "models/neural-chat-7b-v3-2",
+    "model_name": "models/neural-chat-7b-v3-1",
     "max_tokens_count": 2048
 }

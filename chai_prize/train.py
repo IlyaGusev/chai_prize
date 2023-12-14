@@ -144,7 +144,7 @@ def train(
     only_target_loss = config.get("only_target_loss", True)
     max_tokens_count = config["max_tokens_count"]
 
-    max_examples_per_record = config.get("max_examples_per_record", 100)
+    max_examples_per_record = config.get("max_examples_per_record", 1)
     datasets = []
     for records in (train_records, val_records):
         datasets.append(ChatDataset(
