@@ -27,7 +27,7 @@ def get_pippa_key(record):
 
 def merge_pippa_output(input_path, original_path, output_path):
     rated_records = read_jsonl(input_path)
-    rated_records = [r for r in rated_records if "traits" in r]
+    rated_records = [r for r in rated_records if "traits" in r or "parsed_output" in r]
     rated_records = {get_pippa_key(r): r for r in rated_records}
     print(len(rated_records))
 
@@ -46,7 +46,7 @@ def merge_pippa_output(input_path, original_path, output_path):
             continue
 
         new_record = rated_records[key]
-        scores = new_record.pop("traits", {})
+        scores = new_record.pop("traits",  new_record.pop("parsed_output", {}))
         if not scores:
             assert all_keys
             for key in all_keys:
@@ -55,7 +55,7 @@ def merge_pippa_output(input_path, original_path, output_path):
             for key, value in chain(scores["traits"].items(), scores["parameters"].items()):
                 row[key + "_score"] = value.get("score", value.get("slice"))
                 all_keys.add(key + "_score")
-                row[key + "_explanation"] = value["explanation"]
+                row[key + "_explanation"] = value.get("explanation")
                 all_keys.add(key + "_explanation")
             row["mbti_type"] = scores["mbti_type"]
             all_keys.add("mbti_type")

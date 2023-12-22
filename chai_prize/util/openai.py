@@ -47,7 +47,7 @@ def openai_completion(
             else:
                 logging.warning("Hit request rate limit; retrying...")
                 time.sleep(sleep_time)
-    return completions.choices[0]
+    return completions.choices[0].message["content"]
 
 
 def openai_batch_completion(

@@ -4,10 +4,10 @@ from datetime import datetime
 
 import fire
 import wandb
-import chai_guanaco as chai
-from chai_guanaco.metrics import FeedbackMetrics
-from chai_guanaco.login_cli import auto_authenticate
-from chai_guanaco.feedback import _get_latest_feedback
+import chaiverse as chai
+from chaiverse.metrics import FeedbackMetrics
+from chaiverse.login_cli import auto_authenticate
+from chaiverse.feedback import _get_latest_feedback
 
 from chai_prize.tools.submit import submit
 
@@ -26,8 +26,7 @@ def get_submission_metrics(submission_id):
             'mcl': feedback_metrics.mcl,
             'thumbs_up_ratio': feedback_metrics.thumbs_up_ratio,
             'repetition': feedback_metrics.repetition_score,
-            'total_feedback_count': feedback_metrics.total_feedback_count,
-            'user_writing_speed': feedback_metrics.user_writing_speed,
+            'total_feedback_count': feedback_metrics.total_feedback_count
         }
     return metrics
 
@@ -49,20 +48,25 @@ def get_prev_submissions_max_feedback_count(submission_id):
     return total_feedback_count
 
 
+def calc_score(metrics):
+    if not "thumbs_up_ratio" in metrics:
+        return 0.0
+    return metrics["thumbs_up_ratio"]
+
+
 def compare_metrics(metrics1, metrics2):
-    score1 = metrics1["thumbs_up_ratio"] * (2.3 - metrics1["user_writing_speed"])
-    score2 = metrics2["thumbs_up_ratio"] * (2.3 - metrics2["user_writing_speed"])
+    score1 = calc_score(metrics1)
+    score2 = calc_score(metrics2)
     return score1 < score2
 
 
 def get_best_past_metrics(submission_id):
     best_metrics = None
-    total_feedback_count = 0
     for prev_submission_id, metrics in iterate_prev_submissions(submission_id):
-        if metrics and metrics["total_feedback_count"] > total_feedback_count:
-            if metrics["total_feedback_count"] >= 150:
-                best_metrics = metrics
-                total_feedback_count = max(metrics["total_feedback_count"], total_feedback_count)
+        if "total_feedback_count" not in metrics:
+            continue
+        if metrics["total_feedback_count"] >= 150 and (best_metrics is None or compare_metrics(best_metrics, metrics)):
+            best_metrics = metrics
     return best_metrics
 
 
@@ -70,10 +74,9 @@ def deploy(
     model_list: str,
     reward_url: str = None,
     thumbs_up_threshold: int = 0.7,
-    user_writing_speed_threshold: float = 2.8,
     reject_feedback_count: int = 120,
     accept_feedback_count: int = 150,
-    interval: int = 30,
+    interval: int = 600,
     current_submission_id: str = None,
     current_chosen_model: str = None,
     current_wandb_id: str = None,
@@ -87,16 +90,9 @@ def deploy(
     max_frequency_penalty: float = 0.2,
     max_input_tokens: int = 2048,
     best_of: int = 4,
-    use_attributes: bool = False,
-    prompt_prefix: str = "",
-    prompt_suffix: str = "",
-    memory_prefix: str = "",
-    memory_suffix: str = "",
+    use_attributes: bool = False
 ):
     model_list = model_list.split(",")
-    min_feedback_counts = {}
-    for model in model_list:
-        min_feedback_counts[model] = accept_feedback_count
     final_metrics = dict()
 
     while True:
@@ -110,10 +106,6 @@ def deploy(
                 chosen_model,
                 reward_url=reward_url,
                 use_attributes=use_attributes,
-                prompt_prefix=prompt_prefix,
-                prompt_suffix=prompt_suffix,
-                memory_prefix=memory_prefix,
-                memory_suffix=memory_suffix,
                 top_p=top_p,
                 top_k=top_k,
                 max_input_tokens=max_input_tokens,
@@ -138,10 +130,6 @@ def deploy(
         while True:
             print("Submission ID:", submission_id)
 
-            prev_feedback_count = get_prev_submissions_max_feedback_count(submission_id)
-            min_feedback_counts[chosen_model] = max(min_feedback_counts[chosen_model], prev_feedback_count)
-            print("Prev feedback count:", prev_feedback_count)
-
             past_metrics = None
             if chosen_model in final_metrics:
                 past_metrics = final_metrics[chosen_model]
@@ -152,22 +140,22 @@ def deploy(
                 elif compare_metrics(past_metrics, true_past_metrics):
                     final_metrics[chosen_model] = true_past_metrics
                 print("Prev best metrics:", final_metrics[chosen_model])
+                print("Prev score:", calc_score(final_metrics[chosen_model]))
 
             metrics = get_submission_metrics(submission_id)
             print("Metrics:", metrics)
+            print("Current score:", calc_score(metrics))
             total_feedback_count = metrics.get("total_feedback_count", 0)
             wandb.log(metrics, step=total_feedback_count)
             if total_feedback_count == 0:
                 time.sleep(interval)
                 continue
 
-            user_writing_speed = metrics["user_writing_speed"]
             thumbs_up_ratio = metrics["thumbs_up_ratio"]
 
             # Early stopping
             is_bad_thumbs_up = thumbs_up_ratio < thumbs_up_threshold
-            is_bad_user_writing_speed = user_writing_speed > user_writing_speed_threshold
-            is_bad = is_bad_thumbs_up or is_bad_user_writing_speed
+            is_bad = is_bad_thumbs_up
             if total_feedback_count > reject_feedback_count and is_bad:
                 print("Stopping because of bad metrics!")
                 print(f"Feedback count: {total_feedback_count}")
@@ -176,22 +164,8 @@ def deploy(
                 wandb.finish()
                 break
 
-            # Early stopping because of bad metrics compared to prev model
-            if chosen_model in final_metrics and total_feedback_count > min_feedback_counts[chosen_model] - 30:
-                past_metrics = final_metrics[chosen_model]
-                if compare_metrics(metrics, past_metrics):
-                    chai.deactivate_model(submission_id)
-                    print("Stopping because of bad metrics!")
-                    print("Past metrics:", str(past_metrics))
-                    print(f"Feedback count: {total_feedback_count}")
-                    time.sleep(interval)
-                    wandb.finish()
-                    break
-
             # Normal finish
-            if total_feedback_count > min_feedback_counts[chosen_model]:
-                min_feedback_counts[chosen_model] = total_feedback_count + 10
-                final_metrics[chosen_model] = metrics
+            if total_feedback_count > accept_feedback_count:
                 print("Normal finish! Wow! Check your leaderboard")
                 chai.deactivate_model(submission_id)
                 time.sleep(interval)

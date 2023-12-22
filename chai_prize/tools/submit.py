@@ -1,5 +1,5 @@
 import fire
-import chai_guanaco as chai
+import chaiverse as chai
 from chai_prize.formatter import CustomFormatterV3
 
 
@@ -28,10 +28,6 @@ attributes = [
 def submit(
     model_url: str,
     use_attributes: bool = False,
-    prompt_prefix: str = "",
-    prompt_suffix: str = "",
-    memory_prefix: str = "",
-    memory_suffix: str = "",
     reward_url: str = None,
     **kwargs
 ):
@@ -52,13 +48,7 @@ def submit(
     formatter = CustomFormatterV3()
     if not use_attributes:
         attributes = None
-    formatter = CustomFormatterV3(
-        attributes=attributes,
-        prompt_prefix=prompt_prefix,
-        prompt_suffix=prompt_suffix,
-        memory_prefix=memory_prefix,
-        memory_suffix=memory_suffix
-    )
+    formatter = CustomFormatterV3()
     submission_parameters = {
         "model_repo": model_url,
         "generation_params": generation_params,

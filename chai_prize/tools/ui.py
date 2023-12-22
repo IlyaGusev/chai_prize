@@ -109,6 +109,7 @@ def generate(url, text, top_p, top_k, temp, rep_penalty):
             "repetition_penalty": rep_penalty,
             "do_sample": True,
             "temperature": temp,
+            "seed": 42,
             "top_p": top_p,
             "top_k": top_k,
             "watermark": False,
@@ -170,6 +171,7 @@ Makise Kurisu: Time is passing so quickly. Right now, I feel like complaining to
 
 DEFAULT_GREETING = "Hello there, stranger! *smiles*"
 
+<<<<<<< Updated upstream
 DEFAULT_URL = "http://127.0.0.1:8000/generate"
 
 #DEFAULT_NAME = "Фрирен"

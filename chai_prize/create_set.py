@@ -331,6 +331,7 @@ def process_chai(
 def process_pippa(
     sample_rate: float = 1.0,
     max_length: int = 20000,
+    max_system_length: Optional[int] = None,
     dataset_name: str = "PygmalionAI/PIPPA",
     add_ctrl: bool = False,
     min_messages: int = 4,
@@ -381,6 +382,10 @@ def process_pippa(
         prompt = prompt.strip()
         chat.append({"role": "prompt", "content": prompt})
 
+        system_length = len(context + prompt)
+        if max_system_length is not None and system_length > max_system_length:
+            continue
+
         for message in messages:
             role = "user" if message["is_human"] else "bot"
             content = message["message"]
@@ -396,6 +401,8 @@ def process_pippa(
             continue
 
         chat = shrink(chat, max_length)
+        if len(chat) < min_messages + 2:
+            continue
 
         if is_merging_bot_messages:
             chat = merge_bot_messages(chat)
