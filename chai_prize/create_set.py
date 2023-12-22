@@ -22,7 +22,9 @@ from chai_prize.util.data import (
     bot_has_wrong_language,
     remove_trailing_user_messages,
     has_actions,
-    has_ai_ss
+    has_ai_ss,
+    undup,
+    merge_bot_messages
 )
 from chai_prize.datasets.chai import (
     parse_chai_conversation,
@@ -146,10 +148,6 @@ def process_rpr_row(row, add_ctrl: bool = False):
         "role": "prompt",
         "content": prompt
     })
-    chat.append({
-        "role": "bot",
-        "content": greeting
-    })
 
     for dialogue in row["dialogues"]:
         current_chat = copy.deepcopy(chat)
@@ -175,7 +173,6 @@ def process_rpr(
     force_gpt4: bool = True,
     dataset_name: str = "IlyaGusev/gpt_roleplay_realm",
     add_ctrl: bool = False,
-    **kwargs
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split=split)):
@@ -344,7 +341,9 @@ def process_pippa(
     boost_not_english: bool = False,
     only_same_language: bool = False,
     max_char_chats: Optional[int] = None,
-    min_action_length: int = 7
+    min_action_length: int = 7,
+    save_original_fields: bool = False,
+    is_merging_bot_messages: bool = False
 ):
     records = []
 
@@ -355,8 +354,10 @@ def process_pippa(
         # Parse
         context = row["bot_description"]
         char_name = row["bot_name"].strip()
-        messages = revert_flattening(row["conversation"])
-        if row.get("gpt_35_turbo_result", "ok") != "ok":
+        messages = row["conversation"]
+        if isinstance(messages, dict):
+            messages = revert_flattening(messages)
+        if row.get("translation_model", "gpt-4-1106-preview") != "gpt-4-1106-preview":
             continue
 
         if len(messages) < min_messages:
@@ -383,7 +384,7 @@ def process_pippa(
         for message in messages:
             role = "user" if message["is_human"] else "bot"
             content = message["message"]
-            content = content if role == "user" else clean_bot_message(content)
+            content = clean_bot_message(content) if role == "bot" else content
             if content.startswith(char_name + ":"):
                 content = content[len(char_name) + 1:].strip()
             chat.append({
@@ -395,6 +396,11 @@ def process_pippa(
             continue
 
         chat = shrink(chat, max_length)
+
+        if is_merging_bot_messages:
+            chat = merge_bot_messages(chat)
+            if not chat:
+                continue
 
         # Filter
         if is_bad_chat(chat):
@@ -438,12 +444,15 @@ def process_pippa(
         records.append({
             "messages": chat,
             "char_name": char_name,
-            "bot_id": row.get("bot_id", None),
-            "submission_timestamp": timestamp,
-            "categories": row.get("categories", None),
-            "original_fields": row,
             "source": "pippa"
         })
+        if save_original_fields:
+            records[-1].update({
+                "bot_id": row.get("bot_id", None),
+                "submission_timestamp": timestamp,
+                "categories": row.get("categories", None),
+                "original_fields": row,
+            })
 
     if ctrl_counts:
         print("CTRL:", ctrl_counts)
@@ -456,7 +465,6 @@ def process_pippa(
 def process_gpteacher(
     sample_rate: float = 1.0,
     dataset_name: str = "AlekseyKorshuk/gpteacher-role-play-chatml",
-    **kwargs
 ):
     records = []
     for row in tqdm(load_dataset(dataset_name, split="train")):
@@ -491,7 +499,6 @@ def process_limarp(
     dataset_name: str = "TearGosling/limarp_standardized",
     max_length: int = 20000,
     add_ctrl: bool = False,
-    **kwargs
 ):
     current_conversation_id = None
     current_message_id = None
@@ -554,7 +561,6 @@ def process_bluemoon(
     sample_rate: float = 1.0,
     dataset_name: str = "seank0602/bluemoon_fandom_rp",
     max_length: int = 20000,
-    **kwargs
 ):
     records = []
     for row in load_dataset(dataset_name, split="train"):
@@ -589,7 +595,6 @@ def process_ao3(
     sample_rate: float = 1.0,
     dataset_name: str = "ebony59/AO3_fandom_chai",
     max_length: int = 20000,
-    **kwargs
 ):
     records = []
     for row in load_dataset(dataset_name, split="train"):
@@ -632,7 +637,6 @@ def process_instruct_gpt4(
     dataset_name: str = "lksy/ru_instruct_gpt4",
     max_length: int = 20000,
     rm_linebreaks: bool = False,
-    **kwargs
 ):
     records = []
     for row in load_dataset(dataset_name, split="train"):
@@ -679,7 +683,6 @@ def process_saiga(
     dataset_name: str = "IlyaGusev/ru_turbo_saiga",
     max_length: int = 20000,
     rm_linebreaks: bool = False,
-    **kwargs
 ):
     records = []
     for row in load_dataset(dataset_name, split="train"):
@@ -725,7 +728,6 @@ def process_oasst(
     dataset_name: str = "IlyaGusev/oasst1_ru_main_branch",
     max_length: int = 20000,
     rm_linebreaks: bool = False,
-    **kwargs
 ):
     oasst_records = []
     for row in tqdm(load_dataset(dataset_name, split="train")):
@@ -778,7 +780,6 @@ def process_freedomrp(
     boost_not_english: bool = False,
     only_same_language: bool = False,
     min_action_length: int = 7,
-    **kwargs
 ):
     records = []
     for row in load_dataset(dataset_name, split="train"):
@@ -844,12 +845,12 @@ def process_anychars(
     sample_rate: float = 1.0,
     dataset_name: str = "IlyaGusev/anychars",
     max_length: int = 20000,
-    **kwargs
 ):
     records = []
     for row in load_dataset(dataset_name, split="train"):
         chat = revert_flattening(row["messages"])
         chat = shrink(chat, max_length)
+        chat[0]["content"] = chat[0]["content"].strip(":").strip()
         if is_bad_chat(chat):
             continue
         if random.random() > sample_rate:
@@ -865,12 +866,76 @@ def process_anychars(
     return records
 
 
+def process_augmental(
+    sample_rate: float = 1.0,
+    dataset_name: str = "Heralax/Augmental-Dataset",
+    max_length: int = 20000,
+    min_bot_engagement_heuristics_score: float = 0.0,
+):
+    scenario_records = dict()
+    for row in load_dataset(dataset_name, split="train"):
+        last_char_name = row["speaker"]
+        scenario = row["scenario"].strip()
+        history = row["history"].strip()
+        completion = row["completion"].strip()
+
+        chat = [{
+            "role": "system",
+            "content": scenario
+        }, {
+            "role": "prompt",
+            "content": ""
+        }]
+        lines = history.split("\n")
+        for line in lines:
+            assert ":" in line[:20]
+            char_name = line.split(":")[0]
+            content = line[len(char_name) + 2:].strip()
+            chat.append({
+                "content": content,
+                "role": "bot",
+                "char_name": char_name
+            })
+        chat.append({
+            "content": completion,
+            "char_name": last_char_name,
+            "role": "bot"
+        })
+        record = {
+            "messages": chat,
+            "char_name": last_char_name,
+            "source": "augmental"
+        }
+        if scenario in scenario_records:
+            prev_record = scenario_records[scenario]
+            if len(prev_record["messages"]) < len(chat):
+                scenario_records[scenario] = record
+        else:
+            scenario_records[scenario] = record
+    records = list(scenario_records.values())
+
+    clean_records = []
+    for record in records:
+        if calc_bot_engagement(record["messages"]) < min_bot_engagement_heuristics_score:
+            continue
+        clean_records.append(record)
+    records = clean_records
+
+    print("Augmental count:", len(records))
+    if records:
+        print("Augmental max length:", calc_max_length(records))
+    return records
+
 
 def main(config_path, output_dir):
     random.seed(42)
     with open(config_path) as r:
         config = json.load(r)
     records = []
+
+    # Augmental
+    if "augmental" in config:
+        records += process_augmental(**config["augmental"])
 
     # Anychars
     if "anychars" in config:
@@ -930,16 +995,7 @@ def main(config_path, output_dir):
     records = [r for r in records if not is_bad_chat(r["messages"])]
 
     print("Before undup:", len(records))
-
-    new_records = {}
-    for r in records:
-        user_messages = [m for m in r["messages"] if m["role"] == "user"]
-        if not user_messages:
-            continue
-        first_user_message = user_messages[0]["content"][:30]
-        new_records[(r["char_name"], first_user_message)] = r
-    records = list(new_records.values())
-
+    records = undup(records)
     print("All count after cleaning:", len(records))
 
     random.shuffle(records)

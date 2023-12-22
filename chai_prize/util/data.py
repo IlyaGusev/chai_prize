@@ -103,10 +103,42 @@ def has_bot_message(messages):
     return "bot" in roles
 
 
-def has_repetition(messages, prefix_length: int = 20):
-    bot_messages = [m["content"][:prefix_length] for m in messages if m["role"] == "bot"]
-    uniq_bot_messages = set(bot_messages)
-    return len(uniq_bot_messages) < len(bot_messages)
+def has_user_message(messages):
+    roles = {m["role"] for m in messages}
+    return "user" in roles
+
+
+def generate_ngrams(elements, n: int):
+    return {tuple(elements[i:i+n]) for i in range(len(elements) - n + 1)}
+
+
+def has_repetition(messages, prefix_length: int = 20, max_common_ngrams: int = 6):
+    bot_messages = [m["content"].lower() for m in messages if m["role"] == "bot"]
+
+    current_ngrams = set()
+    for message in bot_messages:
+        new_ngrams = generate_ngrams(message.split(), n=max_common_ngrams)
+        if current_ngrams.intersection(new_ngrams):
+            return True
+        current_ngrams.update(new_ngrams)
+
+    start_bot_messages = [m[:prefix_length] for m in bot_messages]
+    uniq_bot_messages = set(start_bot_messages)
+    return len(uniq_bot_messages) < len(start_bot_messages)
+
+
+def undup(records):
+    new_records = {}
+    for r in records:
+        user_messages = [m for m in r["messages"] if m["role"] == "user"]
+        bot_messages = [m for m in r["messages"] if m["role"] == "bot"]
+        if user_messages:
+            first_message = user_messages[0]["content"][:30]
+        else:
+            first_message = bot_messages[0]["content"][:30]
+        new_records[(r["char_name"], first_message)] = r
+    records = list(new_records.values())
+    return records
 
 
 def has_correct_roles(messages):
@@ -176,6 +208,29 @@ def bot_has_wrong_language(chat):
     user_language = calc_main_language(chat, "user")
     return bot_language != user_language
 
+BAD_SS = (
+    "... ...",
+    ".....",
+    "???????",
+    "!!!!!!!"
+)
+
+def is_bot_broken(messages):
+    bot_messages = [m["content"] for m in messages if m["role"] == "bot"]
+    for m in bot_messages:
+        if any(ss in m for ss in BAD_SS):
+            return True
+        words = m.split()
+        for w in words:
+            if len(w) >= 35:
+                return True
+        if not words:
+            continue
+        max_cnt = Counter(words).most_common()[0][1]
+        if max_cnt >= 10:
+            return True
+    return False
+
 
 def is_bad_chat(chat):
     if not chat:
@@ -196,7 +251,30 @@ def is_bad_chat(chat):
     if not has_bot_message(chat):
         return True
 
+    if is_bot_broken(chat):
+        return True
+
     return False
+
+
+def merge_bot_messages(messages):
+    new_messages = []
+    prev_role = None
+    merge_count = 0
+    for m in messages:
+        role = m["role"]
+        if role != "bot" or prev_role != "bot":
+            new_messages.append(m)
+            merge_count = 0
+        else:
+            assert new_messages[-1]["role"] == "bot"
+            assert role == "bot"
+            new_messages[-1]["content"] += "\n" + m["content"]
+            merge_count += 1
+            if merge_count >= 4:
+                return None
+        prev_role = role
+    return new_messages
 
 
 AI_SS = (

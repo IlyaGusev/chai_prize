@@ -31,17 +31,18 @@ class Conversation:
             meta["char_name"] = self.char_name
         return meta
 
-    def add_message(self, message, role):
+    def add_message(self, message, role, char_name = None):
         self.messages.append({
             "role": role,
-            "content": message
+            "content": message,
+            "char_name": char_name
         })
 
     def add_user_message(self, message):
         return self.add_message(message, Conversation.USER_ROLE)
 
-    def add_bot_message(self, message):
-        return self.add_message(message, Conversation.BOT_ROLE)
+    def add_bot_message(self, message, char_name = None):
+        return self.add_message(message, Conversation.BOT_ROLE, char_name)
 
     def add_system_message(self, message):
         return self.add_message(message, Conversation.SYSTEM_ROLE)
@@ -57,7 +58,10 @@ class Conversation:
             Conversation.BOT_ROLE: self.bot_message_template
         }
         content = message["content"]
-        return mapping[message["role"]].format(content=content, **self.get_meta())
+        char_name = message["char_name"]
+        if char_name is None:
+            return mapping[message["role"]].format(content=content, **self.get_meta())
+        return mapping[message["role"]].format(content=content, char_name=char_name)
 
     def get_prompt(self, add_suffix: bool = True):
         messages = self.messages
@@ -93,4 +97,4 @@ class Conversation:
                 Conversation.SYSTEM_ROLE,
                 Conversation.PROMPT_ROLE,
             )
-            self.add_message(message["content"], message["role"])
+            self.add_message(message["content"], message["role"], message.get("char_name"))
