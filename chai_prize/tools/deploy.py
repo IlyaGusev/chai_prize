@@ -49,7 +49,7 @@ def get_prev_submissions_max_feedback_count(submission_id):
 
 
 def calc_score(metrics):
-    if not "thumbs_up_ratio" in metrics:
+    if "thumbs_up_ratio" not in metrics:
         return 0.0
     return metrics["thumbs_up_ratio"]
 

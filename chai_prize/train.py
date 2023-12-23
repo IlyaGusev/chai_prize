@@ -20,7 +20,7 @@ from transformers import (
     BitsAndBytesConfig
 )
 from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
-from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training
+from peft import get_peft_model, LoraConfig
 
 from chai_prize.dataset import ChatDataset
 from chai_prize.util.dl import set_random_seed, fix_tokenizer, fix_model

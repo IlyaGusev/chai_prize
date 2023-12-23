@@ -1,4 +1,5 @@
 import json
+from typing import Optional, Iterable, Tuple, List, Dict
 
 
 class Conversation:
@@ -14,7 +15,7 @@ class Conversation:
         user_message_template: str,
         bot_message_template: str,
         suffix: str,
-        char_name: str = None
+        char_name: Optional[str] = None
     ):
         self.system_message_template = system_message_template
         self.user_message_template = user_message_template
@@ -22,66 +23,64 @@ class Conversation:
         self.prompt_message_template = prompt_message_template
         self.suffix = suffix
         self.char_name = char_name
-
         self.messages = []
 
-    def get_meta(self):
-        meta = dict()
-        if self.char_name is not None:
-            meta["char_name"] = self.char_name
-        return meta
-
-    def add_message(self, message, role, char_name = None):
+    def add_message(
+        self,
+        content: str,
+        role: str,
+        char_name: Optional[str] = None
+    ) -> None:
+        assert role
         self.messages.append({
             "role": role,
-            "content": message,
+            "content": content,
             "char_name": char_name
         })
 
-    def add_user_message(self, message):
+    def add_user_message(self, message: str) -> None:
         return self.add_message(message, Conversation.USER_ROLE)
 
-    def add_bot_message(self, message, char_name = None):
-        return self.add_message(message, Conversation.BOT_ROLE, char_name)
-
-    def add_system_message(self, message):
+    def add_system_message(self, message: str) -> None:
         return self.add_message(message, Conversation.SYSTEM_ROLE)
 
-    def add_prompt_message(self, message):
+    def add_prompt_message(self, message: str) -> None:
         return self.add_message(message, Conversation.PROMPT_ROLE)
 
-    def format_message(self, message):
+    def add_bot_message(self, message: str, char_name: Optional[str] = None) -> None:
+        if char_name is None:
+            char_name = self.char_name
+        return self.add_message(message, Conversation.BOT_ROLE, char_name)
+
+    def format_message(self, message) -> str:
         mapping = {
             Conversation.SYSTEM_ROLE: self.system_message_template,
             Conversation.USER_ROLE: self.user_message_template,
             Conversation.PROMPT_ROLE: self.prompt_message_template,
             Conversation.BOT_ROLE: self.bot_message_template
         }
-        content = message["content"]
-        char_name = message["char_name"]
-        if char_name is None:
-            return mapping[message["role"]].format(content=content, **self.get_meta())
-        return mapping[message["role"]].format(content=content, char_name=char_name)
+        return mapping[message["role"]].format(
+            content=message["content"],
+            char_name=message["char_name"]
+        )
 
-    def get_prompt(self, add_suffix: bool = True):
-        messages = self.messages
-
+    def get_prompt(self, add_suffix: bool = True) -> str:
         final_text = ""
-        for message in messages:
+        for message in self.messages:
             final_text += self.format_message(message)
 
         if add_suffix:
-            suffix = self.suffix.format(**self.get_meta())
+            suffix = self.suffix.format(char_name=self.char_name)
             final_text += suffix
 
         return final_text.strip()
 
-    def iter_messages(self):
+    def iter_messages(self) -> Iterable[Tuple[str, str]]:
         for message in self.messages:
             yield self.format_message(message), message["role"]
 
     @classmethod
-    def from_template(cls, file_name, **kwargs):
+    def from_template(cls, file_name: str, **kwargs):
         with open(file_name, encoding="utf-8") as r:
             template = json.load(r)
         return Conversation(
@@ -89,7 +88,7 @@ class Conversation:
             **kwargs
         )
 
-    def expand(self, messages):
+    def expand(self, messages: List[Dict[str, str]]) -> None:
         for message in messages:
             assert message["role"] in (
                 Conversation.USER_ROLE,
@@ -97,4 +96,5 @@ class Conversation:
                 Conversation.SYSTEM_ROLE,
                 Conversation.PROMPT_ROLE,
             )
-            self.add_message(message["content"], message["role"], message.get("char_name"))
+            assert isinstance(message["content"], str)
+            self.add_message(**message)

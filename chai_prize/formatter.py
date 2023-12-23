@@ -1,5 +1,3 @@
-from typing import Optional, List
-
 from chaiverse.formatters import PromptFormatter
 
 

@@ -17,17 +17,8 @@ class CustomModelSubmitter(chai.ModelSubmitter):
         return submission_id
 
 
-attributes = [
-    "Verbosity: low",
-    "Actions: many",
-    "Creativity: high",
-    "Capriciousness: low",
-    "Fragility: low"
-]
-
 def submit(
     model_url: str,
-    use_attributes: bool = False,
     reward_url: str = None,
     **kwargs
 ):
@@ -46,8 +37,6 @@ def submit(
     print(generation_params)
     model_name = model_url.split("/")[-1]
     formatter = CustomFormatterV3()
-    if not use_attributes:
-        attributes = None
     formatter = CustomFormatterV3()
     submission_parameters = {
         "model_repo": model_url,

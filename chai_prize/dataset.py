@@ -81,15 +81,13 @@ class ChatDataset(Dataset):
             message_tokens = self.get_tokens("\n" + message)
             message_tokens = message_tokens[2:]
             tokens_count = len(message_tokens)
-            message_found = False
             for idx in range(prev_idx, len(labels) - tokens_count + 2):
                 if input_ids[idx: idx + tokens_count] == message_tokens:
                     labels[idx: idx + tokens_count] = message_tokens
                     prev_idx = idx + tokens_count
-                    message_found = True
                     break
         assert labels != input_ids
-        assert any(l != self.labels_pad_token_id for l in labels)
+        assert any(label != self.labels_pad_token_id for label in labels)
         assert labels[-1] != self.labels_pad_token_id
         return labels
 

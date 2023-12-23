@@ -10,21 +10,10 @@ from datasets import load_dataset
 from tqdm import tqdm
 
 from chai_prize.util.data import (
-    has_bot_message,
-    calc_max_length,
-    shrink,
-    has_correct_roles,
-    is_bad_chat,
     has_repetition,
-    remove_trailing_user_messages,
     bot_has_wrong_language,
     has_actions,
     remove_actions
-)
-from chai_prize.datasets.chai import (
-    parse_chai_conversation,
-    is_whitelisted_model,
-    is_good_feedback
 )
 from chai_prize.create_set import process_chai
 

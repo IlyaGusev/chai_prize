@@ -129,7 +129,6 @@ def add_ctrl_attributes(chat, row, controls=DEFAULT_CONTROLS):
 
 def process_rpr_row(row, add_ctrl: bool = False):
     name = row["name"]
-    greeting = row["greeting"]
     context = row["context"]
     example_dialogue = row["example_dialogue"]
 
@@ -1005,10 +1004,24 @@ def main(config_path, output_dir):
     records = undup(records)
     print("All count after cleaning:", len(records))
 
-    random.shuffle(records)
-    border = int(0.95 * len(records))
-    train_records = records[:border]
-    val_records = records[border:]
+    stratify_by_chars = config.get("stratify_by_chars", False)
+    if stratify_by_chars:
+        chars = set()
+        for r in records:
+            chars.add(r["char_name"])
+        chars = list(chars)
+        random.shuffle(chars)
+        border = int(0.95 * len(chars))
+        train_chars = set(chars[:border])
+        val_chars = set(chars[border:])
+        train_records = [r for r in records if r["char_name"] in train_chars]
+        val_records = [r for r in records if r["char_name"] in val_chars]
+    else:
+        random.shuffle(records)
+        border = int(0.95 * len(records))
+        train_records = records[:border]
+        val_records = records[border:]
+
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     with open(os.path.join(output_dir, "train.jsonl"), "w") as w:

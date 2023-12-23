@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from torch.utils.data import Dataset
-from peft import LoraConfig, TaskType, get_peft_model
+from peft import LoraConfig, get_peft_model
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig, TrainingArguments, Trainer
 from trl import RewardTrainer, RewardConfig
 
@@ -93,7 +93,7 @@ class ChatRewardDataset(Dataset):
         other_messages = messages[2:]
 
         if calc_tokens_count(system_messages) > self.max_tokens_count // 2:
-            system_message  = system_messages[0]["content"]
+            system_message = system_messages[0]["content"]
             prompt_message = system_messages[1]["content"]
             system_tokens = self.get_tokens(system_message)
             prompt_tokens = self.get_tokens(prompt_message)
