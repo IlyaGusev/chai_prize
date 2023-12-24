@@ -7,9 +7,19 @@ def count_user_messages(conversation):
         return conversation.count("Anonymous user:")
     return conversation.count("\nXXXXXXXXXXXXXX:")
 
-def show_feedbacks(submission_id: str, public_only: bool = False):
-    model_feedback = chai.get_feedback(submission_id)
-    df = model_feedback.df
+
+def show_feedbacks(submission_id: str, user_ids: str = None, public_only: bool = False):
+    df = chai.get_feedback(submission_id).df
+    if user_ids:
+        if isinstance(user_ids, str):
+            user_ids = [user_ids]
+        records = df[df["user_id"].isin(user_ids)].to_dict(orient="records")
+        for record in records:
+            print(record["feedback"])
+            print()
+            print(record["conversation"])
+            print("============")
+        return
     df = df.drop(["conversation_id", "model_name", "bot_id"], axis=1)
     if public_only:
         df = df[df["public"] == True]

@@ -1,9 +1,9 @@
 import fire
 import pandas as pd
 from tqdm import tqdm
-import chai_guanaco as chai
-from chai_guanaco.login_cli import auto_authenticate
-from chai_guanaco.metrics import get_submission_metrics
+import chaiverse as chai
+from chaiverse.login_cli import auto_authenticate
+from chaiverse.metrics import get_submission_metrics
 
 
 @auto_authenticate

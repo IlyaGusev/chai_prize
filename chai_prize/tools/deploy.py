@@ -90,7 +90,6 @@ def deploy(
     max_frequency_penalty: float = 0.2,
     max_input_tokens: int = 2048,
     best_of: int = 4,
-    use_attributes: bool = False
 ):
     model_list = model_list.split(",")
     final_metrics = dict()
@@ -105,7 +104,6 @@ def deploy(
             submission_id, params = submit(
                 chosen_model,
                 reward_url=reward_url,
-                use_attributes=use_attributes,
                 top_p=top_p,
                 top_k=top_k,
                 max_input_tokens=max_input_tokens,
