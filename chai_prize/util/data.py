@@ -45,12 +45,19 @@ WHITESPACES = {" ", " ", " ", " ", " ", "　", " ", " ", " ", " "}
 
 BAD_SS = (
     "... ...",
-    ".....",
-    "???????",
-    "!!!!!!!",
-    " AI",
+    ".......",
+    "????????",
+    "!!!!!!!!",
     "language model",
-    "Chai"
+    " chai ",
+    "harmful stereotypes",
+    "cannot provide",
+    "not appropriate",
+    "inappropriate content",
+    "may be harmful",
+    "i cannot fulfill",
+    "considered inappropriate",
+    "harmful"
 )
 
 AI_SS = (
@@ -203,7 +210,7 @@ def generate_ngrams(elements, n: int):
     return {tuple(elements[i:i+n]) for i in range(len(elements) - n + 1)}
 
 
-def has_repetition(messages, prefix_length: int = 20, max_common_ngrams: int = 6):
+def has_repetition(messages, prefix_length: int = 30, max_common_ngrams: int = 7):
     bot_messages = [m["content"].lower() for m in messages if m["role"] == "bot"]
 
     current_ngrams = set()
@@ -212,7 +219,6 @@ def has_repetition(messages, prefix_length: int = 20, max_common_ngrams: int = 6
         if current_ngrams.intersection(new_ngrams):
             return True
         current_ngrams.update(new_ngrams)
-
     start_bot_messages = [m[:prefix_length] for m in bot_messages]
     uniq_bot_messages = set(start_bot_messages)
     return len(uniq_bot_messages) < len(start_bot_messages)
@@ -269,6 +275,7 @@ def is_single_character(char_name):
 def has_bad_keywords(chat):
     bot_messages = [m["content"] for m in chat if m["role"] == "bot"]
     for content in bot_messages:
+        content = content.lower()
         if any(s in content for s in BAD_SS):
             return True
     return False
@@ -305,7 +312,7 @@ def is_bot_broken(messages):
         if not words:
             continue
         max_cnt = Counter(words).most_common()[0][1]
-        if max_cnt >= 10:
+        if float(max_cnt) / len(words) > 0.15 and max_cnt > 10:
             return True
     return False
 
