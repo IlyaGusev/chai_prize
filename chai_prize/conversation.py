@@ -32,6 +32,11 @@ class Conversation:
         char_name: Optional[str] = None
     ) -> None:
         assert role
+        if role == Conversation.BOT_ROLE:
+            if char_name is None:
+                char_name = self.char_name
+            assert char_name is not None
+
         self.messages.append({
             "role": role,
             "content": content,
@@ -48,8 +53,6 @@ class Conversation:
         return self.add_message(message, Conversation.PROMPT_ROLE)
 
     def add_bot_message(self, message: str, char_name: Optional[str] = None) -> None:
-        if char_name is None:
-            char_name = self.char_name
         return self.add_message(message, Conversation.BOT_ROLE, char_name)
 
     def format_message(self, message) -> str:
