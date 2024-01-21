@@ -1,0 +1,17 @@
+{
+    "pippa": {
+        "sample_rate": 1.0,
+        "max_length": 30000,
+        "dataset_name": "IlyaGusev/pippa_ru",
+        "min_messages": 6,
+        "is_merging_bot_messages": true
+    },
+    "rpr_ru": {
+        "sample_rate": 1.0,
+        "force_gpt4": true
+    },
+    "anychars": {
+        "sample_rate": 1.0
+    },
+    "stratify_by_chars": true
+}
