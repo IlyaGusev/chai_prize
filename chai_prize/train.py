@@ -220,7 +220,7 @@ def train(
     )
 
     if trainer_config.get("report_to", "wandb") == "wandb":
-        wandb.init(project="rulm_self_instruct", name=config_file)
+        wandb.init(entity="ilyagusev", project="rulm_self_instruct", name=config_file)
 
     trainer.train()
     model.save_pretrained(output_dir)

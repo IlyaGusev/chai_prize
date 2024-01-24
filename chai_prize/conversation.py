@@ -32,7 +32,7 @@ class Conversation:
         char_name: Optional[str] = None
     ) -> None:
         assert role
-        if role == Conversation.BOT_ROLE:
+        if role in (Conversation.BOT_ROLE, Conversation.SYSTEM_ROLE):
             if char_name is None:
                 char_name = self.char_name
             assert char_name is not None

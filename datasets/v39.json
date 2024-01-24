@@ -12,5 +12,6 @@
     },
     "anychars": {
         "sample_rate": 1.0
-    }
+    },
+    "stratify_by_chars": true
 }
