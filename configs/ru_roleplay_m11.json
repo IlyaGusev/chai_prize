@@ -7,7 +7,7 @@
         "eval_steps": 4,
         "save_steps": 4,
         "logging_steps": 1,
-        "learning_rate": 0.00005,
+        "learning_rate": 0.0001,
         "num_train_epochs": 3,
         "lr_scheduler_type": "cosine",
         "warmup_steps": 4,
@@ -16,18 +16,18 @@
         "optim": "adamw_torch"
     },
     "lora": {
-        "r": 32,
+        "r": 16,
         "lora_alpha": 16,
         "lora_dropout": 0.1,
         "bias": "none",
-        "target_modules": ["q_proj", "v_proj", "k_proj", "o_proj", "up_proj", "down_proj", "gate_proj"],
+        "target_modules": ["q_proj", "v_proj", "k_proj", "o_proj", "down_proj", "up_proj", "gate_proj"],
         "task_type": "CAUSAL_LM",
-        "modules_to_save": ["embed_tokens", "lm_head"]
+        "modules_to_save": ["lm_head"]
     },
     "load_in_8bit": true,
     "only_target_loss": true,
     "add_global_eos": false,
     "templates_path": "prompts/prompt_v3.json",
-    "model_name": "models/ruadapt_mistral_7b_v0.1",
-    "max_tokens_count": 4096
+    "model_name": "models/Nous-Hermes-2-SOLAR-10.7B",
+    "max_tokens_count": 3072
 }
