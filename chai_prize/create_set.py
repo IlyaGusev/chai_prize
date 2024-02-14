@@ -854,7 +854,7 @@ def process_anychars(
 ):
     records = []
     for row in load_dataset(dataset_name, split="train"):
-        chat = revert_flattening(row["messages"])
+        chat = row["messages"]
         chat = shrink(chat, max_length)
         chat[0]["content"] = chat[0]["content"].strip(":").strip()
         if is_bad_chat(chat):
@@ -933,7 +933,7 @@ def process_augmental(
     return records
 
 
-def main(config_path, output_dir):
+def main(config_path, output_dir, convert_to_plain: bool = False):
     random.seed(42)
     with open(config_path) as r:
         config = json.load(r)
@@ -1004,6 +1004,16 @@ def main(config_path, output_dir):
     records = undup(records)
     print("All count after cleaning:", len(records))
 
+    if convert_to_plain:
+        from chai_prize.conversation import Conversation
+
+        def to_text(r):
+            conversation = Conversation.from_template("prompts/prompt_v3.json", char_name=r["char_name"])
+            conversation.expand(r["messages"])
+            return conversation.get_prompt(False)
+
+        records = [{"char_name": r["char_name"], "text": to_text(r)} for r in records]
+
     stratify_by_chars = config.get("stratify_by_chars", False)
     if stratify_by_chars:
         chars = set()
@@ -1014,6 +1024,7 @@ def main(config_path, output_dir):
         border = int(0.95 * len(chars))
         train_chars = set(chars[:border])
         val_chars = set(chars[border:])
+        random.shuffle(records)
         train_records = [r for r in records if r["char_name"] in train_chars]
         val_records = [r for r in records if r["char_name"] in val_chars]
     else:
