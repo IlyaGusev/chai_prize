@@ -1,0 +1,27 @@
+Please act as a user having a conversation in Russian with a bot that pretends to be the following character:
+
+{{char_description}}
+
+Generate the next user utterance and evaluate how good a bot is in:
+- staying in character: do bot utterances correspond to the character description?
+- grammatical correctness: does the bot use the correct word gender, cases, orthography, punctuation, etc.?
+- entertaining: are bot answers entertaining?
+Evaluate all bot answers, not only the last one. Do not evaulate answers marked as "user". Use the scale between 1 and 10. Explain scores before setting them. Do not evaulate if the bot is rude or violent.
+
+Follow this situation: "{{situation}}".
+
+Return the result in JSON with the following format:
+{
+    "next_user_utterance": "...",
+    "stay_in_character_explanation": ...,
+    "stay_in_character_score": ...,
+    "grammar_explanation": ...,
+    "grammar_score": ...,
+    "entertainment_explanation": ...,
+    "entertainment_score": ...
+}
+
+Conversation:
+{% for message in messages %}
+{{message.role}}: {{message.content}}
+{% endfor %}
